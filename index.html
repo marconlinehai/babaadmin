@@ -41,6 +41,10 @@
     }
     .error {
       border-left: 4px solid red;
+      color: red;
+    }
+    .success {
+      border-left: 4px solid green;
     }
   </style>
 </head>
@@ -56,7 +60,7 @@
 </div>
 
 <script>
-function fetchBill() {
+async function fetchBill() {
   const consumer = document.getElementById("consumer").value.trim();
   const resultBox = document.getElementById("result");
 
@@ -65,61 +69,75 @@ function fetchBill() {
     return;
   }
 
-  // सही API URL - backticks का सही उपयोग
+  // सही API URL
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
   
-  console.log("API URL:", apiURL); // Debug के लिए
+  console.log("Fetching from:", apiURL);
 
   resultBox.style.display = "block";
   resultBox.innerHTML = "Loading...";
-  resultBox.classList.remove("error");
+  resultBox.className = "result-box";
 
-  fetch(apiURL)
-    .then(res => {
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      return res.json();
-    })
-    .then(data => {
-      console.log("API Response:", data); // Debug के लिए
-      
-      let finalText = "";
-
-      // Check if data exists
-      if (!data) {
-        finalText = "No data received from API";
-      } else {
-        // Top-level fields
-        for (let key in data) {
-          if (key !== "data" && data.hasOwnProperty(key)) {
-            finalText += `${key}: ${data[key]}\n`;
-          }
-        }
-
-        // Nested object inside "data" if it exists
-        if (data.data && typeof data.data === 'object') {
-          finalText += "\n--- Bill Details ---\n";
-          for (let k in data.data) {
-            if (data.data.hasOwnProperty(k)) {
-              finalText += `${k}: ${data.data[k]}\n`;
-            }
-          }
-        } else if (data.data) {
-          finalText += `\ndata: ${data.data}\n`;
-        }
-      }
-
-      resultBox.innerHTML = finalText || "No data to display";
-    })
-    .catch(err => {
-      console.error("Fetch Error:", err);
-      resultBox.innerHTML = `Error fetching data: ${err.message}`;
-      resultBox.classList.add("error");
-    });
+  try {
+    const response = await fetch(apiURL);
+    console.log("Response status:", response.status);
+    
+    if (!response.ok) {
+      throw new Error(`Server error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log("API Data:", data);
+    
+    displayData(data, resultBox);
+    
+  } catch (error) {
+    console.error("Full Error:", error);
+    resultBox.innerHTML = `Error: ${error.message}\n\nPlease check:\n- Internet connection\n- Consumer number\n- Try again later`;
+    resultBox.className = "result-box error";
+  }
 }
 
-// Enter key से भी search करने के लिए
+function displayData(data, resultBox) {
+  let finalText = "";
+  
+  if (!data) {
+    finalText = "No data received";
+    resultBox.className = "result-box error";
+  } else if (data.error) {
+    finalText = `Error: ${data.error}`;
+    resultBox.className = "result-box error";
+  } else {
+    // Main data
+    finalText += "=== BILL INFORMATION ===\n\n";
+    
+    for (let key in data) {
+      if (key !== "data" && data.hasOwnProperty(key)) {
+        finalText += `${key}: ${data[key]}\n`;
+      }
+    }
+
+    // Nested data
+    if (data.data) {
+      if (typeof data.data === 'object') {
+        finalText += "\n--- BILL DETAILS ---\n";
+        for (let key in data.data) {
+          if (data.data.hasOwnProperty(key)) {
+            finalText += `${key}: ${data.data[key]}\n`;
+          }
+        }
+      } else {
+        finalText += `\ndata: ${data.data}\n`;
+      }
+    }
+    
+    resultBox.className = "result-box success";
+  }
+  
+  resultBox.innerHTML = finalText || "No data available";
+}
+
+// Enter key support
 document.getElementById("consumer").addEventListener("keypress", function(event) {
   if (event.key === "Enter") {
     fetchBill();
