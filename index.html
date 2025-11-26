@@ -63,6 +63,14 @@
     .button-group button {
       flex: 1;
     }
+    .debug-info {
+      background: #fff3cd;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border-left: 4px solid #ffc107;
+      font-size: 14px;
+    }
   </style>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 </head>
@@ -76,8 +84,10 @@
   <div class="button-group">
     <button onclick="fetchBill()">Get Bill Info</button>
     <button class="export-btn" onclick="exportToExcel()" id="exportBtn" style="display:none;">Export to Excel</button>
+    <button class="export-btn" onclick="showDebugInfo()" id="debugBtn" style="display:none; background: #ffc107; color: black;">Debug Data</button>
   </div>
 
+  <div id="debug" class="debug-info" style="display:none;"></div>
   <div id="result" class="result-box"></div>
 </div>
 
@@ -89,6 +99,8 @@ function fetchBill() {
   const consumer = document.getElementById("consumer").value.trim();
   const resultBox = document.getElementById("result");
   const exportBtn = document.getElementById("exportBtn");
+  const debugBtn = document.getElementById("debugBtn");
+  const debugDiv = document.getElementById("debug");
 
   if (!consumer) {
     alert("Please enter Consumer Number!");
@@ -98,9 +110,11 @@ function fetchBill() {
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
 
   resultBox.style.display = "block";
+  debugDiv.style.display = "none";
   resultBox.innerHTML = "Loading bill details...";
   resultBox.className = "result-box loading";
   exportBtn.style.display = "none";
+  debugBtn.style.display = "none";
 
   fetch(apiURL)
     .then(res => {
@@ -110,7 +124,7 @@ function fetchBill() {
       return res.json();
     })
     .then(data => {
-      console.log("API Response:", data);
+      console.log("Full API Response:", data);
       
       // Store data for Excel export
       currentBillData = data;
@@ -142,13 +156,47 @@ function fetchBill() {
       resultBox.innerHTML = finalText;
       resultBox.className = "result-box";
       exportBtn.style.display = "block";
+      debugBtn.style.display = "block";
+      
+      // Show available fields for debugging
+      showAvailableFields(data);
     })
     .catch(err => {
       console.error("Error:", err);
       resultBox.innerHTML = "Error fetching data! Please check:\n- Internet connection\n- Consumer number\n- Try again later";
       resultBox.className = "result-box";
       exportBtn.style.display = "none";
+      debugBtn.style.display = "none";
     });
+}
+
+function showAvailableFields(data) {
+  const debugDiv = document.getElementById("debug");
+  let debugInfo = "=== AVAILABLE FIELDS ===\n\n";
+  
+  debugInfo += "Top Level Fields:\n";
+  for (let key in data) {
+    if (data.hasOwnProperty(key)) {
+      debugInfo += `- ${key}: ${typeof data[key]}\n`;
+    }
+  }
+  
+  if (data.data && data.data.d) {
+    debugInfo += "\nData.d Fields:\n";
+    const details = data.data.d;
+    for (let key in details) {
+      if (details.hasOwnProperty(key)) {
+        debugInfo += `- ${key}: ${details[key]} (${typeof details[key]})\n`;
+      }
+    }
+  }
+  
+  debugDiv.innerHTML = "<pre>" + debugInfo + "</pre>";
+}
+
+function showDebugInfo() {
+  const debugDiv = document.getElementById("debug");
+  debugDiv.style.display = debugDiv.style.display === "none" ? "block" : "none";
 }
 
 function exportToExcel() {
@@ -161,20 +209,22 @@ function exportToExcel() {
     // Prepare data for Excel
     const excelData = [];
     
-    // Extract data according to your specified format
+    // Extract data from API response
     const details = currentBillData.data?.d || {};
     
+    // Map actual API fields to our column names
     const rowData = {
       'Consumer_No': document.getElementById("consumer").value.trim(),
-      'Contract_Ac': details.contract_ac || details.account_number || 'N/A',
-      'Name': details.name || details.consumer_name || 'N/A',
-      'Mobile': details.mobile || details.phone || 'N/A',
-      'Email': details.email || 'N/A',
-      'Bill_No': currentBillData.bill_number || 'N/A',
-      'Bill_Date': details.bill_date || currentBillData.timestamp || 'N/A',
-      'Amount': details.amount || details.bill_amount || 'N/A',
-      'Due_Date': details.due_date || 'N/A',
-      'Status': currentBillData.status || 'N/A'
+      'Contract_Ac': details.contractNo || details.contractAccount || details.accountNo || 'N/A',
+      'Name': details.consumerName || details.name || details.customerName || 'N/A',
+      'Mobile': details.mobileNo || details.mobile || details.phone || details.contactNo || 'N/A',
+      'Email': details.email || details.emailId || 'N/A',
+      'Bill_No': currentBillData.bill_number || details.billNo || 'N/A',
+      'Bill_Date': details.billDate || details.billingDate || currentBillData.timestamp || 'N/A',
+      'Amount': details.amount || details.billAmount || details.totalAmount || 'N/A',
+      'Due_Date': details.dueDate || details.paymentDueDate || 'N/A',
+      'Status': currentBillData.status || 'N/A',
+      'Address': details.address || details.consumerAddress || 'N/A'
     };
     
     excelData.push(rowData);
@@ -200,43 +250,60 @@ function exportToExcel() {
   }
 }
 
-// Alternative simple CSV export function
-function exportToCSV() {
+// Smart export function that tries to find correct fields
+function smartExportToExcel() {
   if (!currentBillData) {
     alert("No data to export!");
     return;
   }
 
-  const details = currentBillData.data?.d || {};
-  
-  const csvData = [
-    ['Consumer_No', 'Contract_Ac', 'Name', 'Mobile', 'Email', 'Bill_No', 'Bill_Date', 'Amount', 'Due_Date', 'Status'],
-    [
-      document.getElementById("consumer").value.trim(),
-      details.contract_ac || details.account_number || 'N/A',
-      details.name || details.consumer_name || 'N/A',
-      details.mobile || details.phone || 'N/A',
-      details.email || 'N/A',
-      currentBillData.bill_number || 'N/A',
-      details.bill_date || currentBillData.timestamp || 'N/A',
-      details.amount || details.bill_amount || 'N/A',
-      details.due_date || 'N/A',
-      currentBillData.status || 'N/A'
-    ]
-  ];
+  try {
+    const details = currentBillData.data?.d || {};
+    
+    // Find actual field names by searching common patterns
+    const fieldMap = {
+      'Consumer_No': findField(details, ['consumerNo', 'consumerNumber', 'customerNo', 'consumerId']),
+      'Contract_Ac': findField(details, ['contractNo', 'contractAccount', 'accountNo', 'accountNumber']),
+      'Name': findField(details, ['consumerName', 'name', 'customerName', 'accountName']),
+      'Mobile': findField(details, ['mobileNo', 'mobile', 'phone', 'contactNo', 'phoneNumber']),
+      'Email': findField(details, ['email', 'emailId', 'customerEmail']),
+      'Bill_No': currentBillData.bill_number || findField(details, ['billNo', 'billNumber']),
+      'Bill_Date': findField(details, ['billDate', 'billingDate', 'invoiceDate']),
+      'Amount': findField(details, ['amount', 'billAmount', 'totalAmount', 'dueAmount']),
+      'Due_Date': findField(details, ['dueDate', 'paymentDueDate', 'lastDate']),
+      'Address': findField(details, ['address', 'consumerAddress', 'customerAddress'])
+    };
 
-  let csvContent = "data:text/csv;charset=utf-8,";
-  csvData.forEach(row => {
-    csvContent += row.join(",") + "\r\n";
-  });
+    const excelData = [fieldMap];
+    
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Bill Data");
+    
+    const consumerNo = document.getElementById("consumer").value.trim();
+    const fileName = `Bill_Data_${consumerNo}_${new Date().getTime()}.xlsx`;
+    
+    XLSX.writeFile(wb, fileName);
+    
+    alert("Data exported to Excel successfully!");
+    
+  } catch (error) {
+    console.error("Export error:", error);
+    alert("Error exporting to Excel: " + error.message);
+  }
+}
 
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", `bill_data_${document.getElementById("consumer").value.trim()}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+// Helper function to find fields
+function findField(details, possibleNames) {
+  for (let name of possibleNames) {
+    if (details[name] !== undefined) {
+      return details[name];
+    }
+  }
+  return 'N/A';
 }
 
 // Enter key support
@@ -245,6 +312,9 @@ document.getElementById("consumer").addEventListener("keypress", function(event)
     fetchBill();
   }
 });
+
+// Replace export function with smart version
+document.getElementById("exportBtn").onclick = smartExportToExcel;
 </script>
 
 </body>
