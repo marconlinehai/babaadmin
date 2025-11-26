@@ -70,13 +70,23 @@ function fetchBill() {
   fetch(apiURL)
     .then(res => res.json())
     .then(data => {
-      let formatted = "";
+      let finalText = "";
 
+      // Top-level fields
       for (let key in data) {
-        formatted += `${key}: ${data[key]}\n`;
+        if (key !== "data") {
+          finalText += `${key}: ${data[key]}\n`;
+        }
       }
 
-      resultBox.innerHTML = formatted;
+      finalText += "\n--- Bill Details ---\n";
+
+      // Nested object inside "data"
+      for (let k in data.data) {
+        finalText += `${k}: ${data.data[k]}\n`;
+      }
+
+      resultBox.innerHTML = finalText;
     })
     .catch(err => {
       resultBox.innerHTML = "Error fetching data!";
