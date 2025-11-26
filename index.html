@@ -39,6 +39,9 @@
       font-size: 15px;
       border-left: 4px solid #000;
     }
+    .error {
+      border-left: 4px solid red;
+    }
   </style>
 </head>
 <body>
@@ -62,36 +65,66 @@ function fetchBill() {
     return;
   }
 
+  // सही API URL - backticks का सही उपयोग
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
+  
+  console.log("API URL:", apiURL); // Debug के लिए
 
   resultBox.style.display = "block";
   resultBox.innerHTML = "Loading...";
+  resultBox.classList.remove("error");
 
   fetch(apiURL)
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return res.json();
+    })
     .then(data => {
+      console.log("API Response:", data); // Debug के लिए
+      
       let finalText = "";
 
-      // Top-level fields
-      for (let key in data) {
-        if (key !== "data") {
-          finalText += `${key}: ${data[key]}\n`;
+      // Check if data exists
+      if (!data) {
+        finalText = "No data received from API";
+      } else {
+        // Top-level fields
+        for (let key in data) {
+          if (key !== "data" && data.hasOwnProperty(key)) {
+            finalText += `${key}: ${data[key]}\n`;
+          }
+        }
+
+        // Nested object inside "data" if it exists
+        if (data.data && typeof data.data === 'object') {
+          finalText += "\n--- Bill Details ---\n";
+          for (let k in data.data) {
+            if (data.data.hasOwnProperty(k)) {
+              finalText += `${k}: ${data.data[k]}\n`;
+            }
+          }
+        } else if (data.data) {
+          finalText += `\ndata: ${data.data}\n`;
         }
       }
 
-      finalText += "\n--- Bill Details ---\n";
-
-      // Nested object inside "data"
-      for (let k in data.data) {
-        finalText += `${k}: ${data.data[k]}\n`;
-      }
-
-      resultBox.innerHTML = finalText;
+      resultBox.innerHTML = finalText || "No data to display";
     })
     .catch(err => {
-      resultBox.innerHTML = "Error fetching data!";
+      console.error("Fetch Error:", err);
+      resultBox.innerHTML = `Error fetching data: ${err.message}`;
+      resultBox.classList.add("error");
     });
 }
+
+// Enter key से भी search करने के लिए
+document.getElementById("consumer").addEventListener("keypress", function(event) {
+  if (event.key === "Enter") {
+    fetchBill();
+  }
+});
 </script>
 
 </body>
