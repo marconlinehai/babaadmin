@@ -41,6 +41,11 @@
     .export-btn:hover {
       background: #218838;
     }
+    .debug-btn {
+      background: #ffc107;
+      color: black;
+      margin-top: 10px;
+    }
     .result-box {
       background: #fff;
       padding: 15px;
@@ -49,6 +54,16 @@
       white-space: pre-wrap;
       font-size: 15px;
       border-left: 4px solid #000;
+      display: none;
+    }
+    .debug-box {
+      background: #fff3cd;
+      padding: 15px;
+      margin-top: 15px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      font-size: 14px;
+      border-left: 4px solid #ffc107;
       display: none;
     }
     .loading {
@@ -65,9 +80,11 @@
 
   <input id="consumer" type="text" placeholder="Enter Consumer Number">
   <button onclick="fetchBill()">Get Bill Info</button>
+  <button class="debug-btn" onclick="showDebugInfo()" id="debugBtn" style="display:none;">Show All Fields</button>
   <button class="export-btn" onclick="exportToExcel()" id="exportBtn" style="display:none;">Export to Excel</button>
 
   <div id="result" class="result-box"></div>
+  <div id="debug" class="debug-box"></div>
 </div>
 
 <script>
@@ -78,6 +95,8 @@ function fetchBill() {
   const consumer = document.getElementById("consumer").value.trim();
   const resultBox = document.getElementById("result");
   const exportBtn = document.getElementById("exportBtn");
+  const debugBtn = document.getElementById("debugBtn");
+  const debugBox = document.getElementById("debug");
 
   if (!consumer) {
     alert("Please enter Consumer Number!");
@@ -87,9 +106,11 @@ function fetchBill() {
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
 
   resultBox.style.display = "block";
+  debugBox.style.display = "none";
   resultBox.innerHTML = "Loading bill details...";
   resultBox.className = "result-box loading";
   exportBtn.style.display = "none";
+  debugBtn.style.display = "none";
 
   fetch(apiURL)
     .then(res => {
@@ -99,7 +120,7 @@ function fetchBill() {
       return res.json();
     })
     .then(data => {
-      console.log("API Response:", data);
+      console.log("Full API Response:", data);
       
       // Store data for Excel export
       currentBillData = data;
@@ -131,13 +152,45 @@ function fetchBill() {
       resultBox.innerHTML = finalText;
       resultBox.className = "result-box";
       exportBtn.style.display = "block";
+      debugBtn.style.display = "block";
+      
+      // Show debug info
+      showDebugInfo();
     })
     .catch(err => {
       console.error("Error:", err);
       resultBox.innerHTML = "Error fetching data! Please check:\n- Internet connection\n- Consumer number\n- Try again later";
       resultBox.className = "result-box";
       exportBtn.style.display = "none";
+      debugBtn.style.display = "none";
     });
+}
+
+function showDebugInfo() {
+  if (!currentBillData) return;
+  
+  const debugBox = document.getElementById("debug");
+  let debugText = "=== ALL AVAILABLE FIELDS ===\n\n";
+  
+  debugText += "Main Data Fields:\n";
+  for (let key in currentBillData) {
+    if (currentBillData.hasOwnProperty(key) && key !== "data") {
+      debugText += `📌 ${key}: ${currentBillData[key]}\n`;
+    }
+  }
+  
+  if (currentBillData.data && currentBillData.data.d) {
+    debugText += "\nData.d Fields:\n";
+    const details = currentBillData.data.d;
+    for (let key in details) {
+      if (details.hasOwnProperty(key)) {
+        debugText += `✅ ${key}: ${details[key]}\n`;
+      }
+    }
+  }
+  
+  debugBox.innerHTML = debugText;
+  debugBox.style.display = "block";
 }
 
 function exportToExcel() {
@@ -153,10 +206,19 @@ function exportToExcel() {
     // Extract data from API response
     const details = currentBillData.data?.d || {};
     
-    // Find actual field names
-    const name = details.consumerName || details.name || details.customerName || 'N/A';
+    // Find actual field names by checking all possibilities
+    const name = findField(details, [
+      'consumerName', 'name', 'customerName', 'accountName', 
+      'ConsumerName', 'Name', 'CustomerName', 'consumer_name'
+    ]);
+    
+    const mobile = findField(details, [
+      'mobileNo', 'mobile', 'phone', 'contactNo', 'phoneNumber',
+      'MobileNo', 'Mobile', 'Phone', 'ContactNo', 'mobile_number',
+      'contact', 'Contact', 'phone_no'
+    ]);
+    
     const consumerNo = document.getElementById("consumer").value.trim();
-    const mobile = details.mobileNo || details.mobile || details.phone || details.contactNo || 'N/A';
     
     const rowData = {
       'Name': name,
@@ -178,12 +240,22 @@ function exportToExcel() {
     
     XLSX.writeFile(wb, fileName);
     
-    alert("Data exported to Excel successfully!");
+    alert(`Data exported successfully!\n\nName: ${name}\nMobile: ${mobile}`);
     
   } catch (error) {
     console.error("Export error:", error);
     alert("Error exporting to Excel: " + error.message);
   }
+}
+
+// Helper function to find fields
+function findField(details, possibleNames) {
+  for (let name of possibleNames) {
+    if (details[name] !== undefined && details[name] !== null && details[name] !== '') {
+      return details[name];
+    }
+  }
+  return 'Not Available';
 }
 
 // Enter key support
