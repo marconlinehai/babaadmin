@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Bill Info Fetch</title>
+  <title>Bill Info Fetch with Excel Export</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,7 +13,7 @@
       background: white;
       padding: 20px;
       border-radius: 10px;
-      max-width: 500px;
+      max-width: 700px;
       margin: auto;
       box-shadow: 0 0 10px #ddd;
     }
@@ -29,6 +29,17 @@
       background: black;
       color: white;
       cursor: pointer;
+      border: none;
+    }
+    button:hover {
+      background: #333;
+    }
+    .export-btn {
+      background: #28a745;
+      margin-top: 10px;
+    }
+    .export-btn:hover {
+      background: #218838;
     }
     .result-box {
       background: #fff;
@@ -38,103 +49,194 @@
       white-space: pre-wrap;
       font-size: 15px;
       border-left: 4px solid #000;
+      display: none;
     }
-    .error {
-      border-left: 4px solid red;
-      color: red;
+    .loading {
+      color: #666;
+      font-style: italic;
     }
-    .success {
-      border-left: 4px solid green;
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .button-group button {
+      flex: 1;
     }
   </style>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
 <div class="box">
-  <h2>Search Bill Details</h2>
+  <h2>Search Bill Details with Excel Export</h2>
 
   <input id="consumer" type="text" placeholder="Enter Consumer Number">
-  <button onclick="fetchBill()">Get Bill Info</button>
+  
+  <div class="button-group">
+    <button onclick="fetchBill()">Get Bill Info</button>
+    <button class="export-btn" onclick="exportToExcel()" id="exportBtn" style="display:none;">Export to Excel</button>
+  </div>
 
-  <div id="result" class="result-box" style="display:none;"></div>
+  <div id="result" class="result-box"></div>
 </div>
 
 <script>
-async function fetchBill() {
+// Global variable to store bill data
+let currentBillData = null;
+
+function fetchBill() {
   const consumer = document.getElementById("consumer").value.trim();
   const resultBox = document.getElementById("result");
+  const exportBtn = document.getElementById("exportBtn");
 
   if (!consumer) {
     alert("Please enter Consumer Number!");
     return;
   }
 
-  // सही API URL
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
-  
-  console.log("Fetching from:", apiURL);
 
   resultBox.style.display = "block";
-  resultBox.innerHTML = "Loading...";
-  resultBox.className = "result-box";
+  resultBox.innerHTML = "Loading bill details...";
+  resultBox.className = "result-box loading";
+  exportBtn.style.display = "none";
 
-  try {
-    const response = await fetch(apiURL);
-    console.log("Response status:", response.status);
-    
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    console.log("API Data:", data);
-    
-    displayData(data, resultBox);
-    
-  } catch (error) {
-    console.error("Full Error:", error);
-    resultBox.innerHTML = `Error: ${error.message}\n\nPlease check:\n- Internet connection\n- Consumer number\n- Try again later`;
-    resultBox.className = "result-box error";
-  }
-}
-
-function displayData(data, resultBox) {
-  let finalText = "";
-  
-  if (!data) {
-    finalText = "No data received";
-    resultBox.className = "result-box error";
-  } else if (data.error) {
-    finalText = `Error: ${data.error}`;
-    resultBox.className = "result-box error";
-  } else {
-    // Main data
-    finalText += "=== BILL INFORMATION ===\n\n";
-    
-    for (let key in data) {
-      if (key !== "data" && data.hasOwnProperty(key)) {
-        finalText += `${key}: ${data[key]}\n`;
+  fetch(apiURL)
+    .then(res => {
+      if (!res.ok) {
+        throw new Error('Network response was not ok');
       }
-    }
+      return res.json();
+    })
+    .then(data => {
+      console.log("API Response:", data);
+      
+      // Store data for Excel export
+      currentBillData = data;
+      
+      let finalText = "";
 
-    // Nested data
-    if (data.data) {
-      if (typeof data.data === 'object') {
-        finalText += "\n--- BILL DETAILS ---\n";
-        for (let key in data.data) {
-          if (data.data.hasOwnProperty(key)) {
-            finalText += `${key}: ${data.data[key]}\n`;
+      // Main information
+      finalText += "=== BILL INFORMATION ===\n\n";
+      finalText += `Status: ${data.status || 'N/A'}\n`;
+      finalText += `Bill Number: ${data.bill_number || 'N/A'}\n`;
+      finalText += `Timestamp: ${data.timestamp || 'N/A'}\n`;
+
+      // Handle nested data structure
+      if (data.data && data.data.d) {
+        finalText += "\n=== BILL DETAILS ===\n\n";
+        
+        const details = data.data.d;
+        
+        // Display all fields from the d object
+        for (let key in details) {
+          if (details.hasOwnProperty(key)) {
+            finalText += `${key}: ${details[key]}\n`;
           }
         }
       } else {
-        finalText += `\ndata: ${data.data}\n`;
+        finalText += "\nNo detailed bill information available.\n";
       }
-    }
-    
-    resultBox.className = "result-box success";
+
+      resultBox.innerHTML = finalText;
+      resultBox.className = "result-box";
+      exportBtn.style.display = "block";
+    })
+    .catch(err => {
+      console.error("Error:", err);
+      resultBox.innerHTML = "Error fetching data! Please check:\n- Internet connection\n- Consumer number\n- Try again later";
+      resultBox.className = "result-box";
+      exportBtn.style.display = "none";
+    });
+}
+
+function exportToExcel() {
+  if (!currentBillData) {
+    alert("No data to export!");
+    return;
   }
+
+  try {
+    // Prepare data for Excel
+    const excelData = [];
+    
+    // Extract data according to your specified format
+    const details = currentBillData.data?.d || {};
+    
+    const rowData = {
+      'Consumer_No': document.getElementById("consumer").value.trim(),
+      'Contract_Ac': details.contract_ac || details.account_number || 'N/A',
+      'Name': details.name || details.consumer_name || 'N/A',
+      'Mobile': details.mobile || details.phone || 'N/A',
+      'Email': details.email || 'N/A',
+      'Bill_No': currentBillData.bill_number || 'N/A',
+      'Bill_Date': details.bill_date || currentBillData.timestamp || 'N/A',
+      'Amount': details.amount || details.bill_amount || 'N/A',
+      'Due_Date': details.due_date || 'N/A',
+      'Status': currentBillData.status || 'N/A'
+    };
+    
+    excelData.push(rowData);
+    
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Bill Data");
+    
+    // Generate Excel file and download
+    const consumerNo = document.getElementById("consumer").value.trim();
+    const fileName = `Bill_Data_${consumerNo}_${new Date().getTime()}.xlsx`;
+    
+    XLSX.writeFile(wb, fileName);
+    
+    alert("Data exported to Excel successfully!");
+    
+  } catch (error) {
+    console.error("Export error:", error);
+    alert("Error exporting to Excel: " + error.message);
+  }
+}
+
+// Alternative simple CSV export function
+function exportToCSV() {
+  if (!currentBillData) {
+    alert("No data to export!");
+    return;
+  }
+
+  const details = currentBillData.data?.d || {};
   
-  resultBox.innerHTML = finalText || "No data available";
+  const csvData = [
+    ['Consumer_No', 'Contract_Ac', 'Name', 'Mobile', 'Email', 'Bill_No', 'Bill_Date', 'Amount', 'Due_Date', 'Status'],
+    [
+      document.getElementById("consumer").value.trim(),
+      details.contract_ac || details.account_number || 'N/A',
+      details.name || details.consumer_name || 'N/A',
+      details.mobile || details.phone || 'N/A',
+      details.email || 'N/A',
+      currentBillData.bill_number || 'N/A',
+      details.bill_date || currentBillData.timestamp || 'N/A',
+      details.amount || details.bill_amount || 'N/A',
+      details.due_date || 'N/A',
+      currentBillData.status || 'N/A'
+    ]
+  ];
+
+  let csvContent = "data:text/csv;charset=utf-8,";
+  csvData.forEach(row => {
+    csvContent += row.join(",") + "\r\n";
+  });
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `bill_data_${document.getElementById("consumer").value.trim()}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // Enter key support
