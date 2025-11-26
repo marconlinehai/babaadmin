@@ -1,1 +1,88 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Panel</title><script defer="defer" src="../static/js/main.a47b7ee7.js"></script><link href="../static/css/main.2896b16f.css" rel="stylesheet"></head><body class="bg-white dark:bg-gray-900 text-black dark:text-white"><div id="root"></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bill Info Fetch</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 20px;
+    }
+    .box {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 500px;
+      margin: auto;
+      box-shadow: 0 0 10px #ddd;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background: black;
+      color: white;
+      cursor: pointer;
+    }
+    .result-box {
+      background: #fff;
+      padding: 15px;
+      margin-top: 15px;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      font-size: 15px;
+      border-left: 4px solid #000;
+    }
+  </style>
+</head>
+<body>
+
+<div class="box">
+  <h2>Search Bill Details</h2>
+
+  <input id="consumer" type="text" placeholder="Enter Consumer Number">
+  <button onclick="fetchBill()">Get Bill Info</button>
+
+  <div id="result" class="result-box" style="display:none;"></div>
+</div>
+
+<script>
+function fetchBill() {
+  const consumer = document.getElementById("consumer").value.trim();
+  const resultBox = document.getElementById("result");
+
+  if (!consumer) {
+    alert("Please enter Consumer Number!");
+    return;
+  }
+
+  const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
+
+  resultBox.style.display = "block";
+  resultBox.innerHTML = "Loading...";
+
+  fetch(apiURL)
+    .then(res => res.json())
+    .then(data => {
+      let formatted = "";
+
+      for (let key in data) {
+        formatted += `${key}: ${data[key]}\n`;
+      }
+
+      resultBox.innerHTML = formatted;
+    })
+    .catch(err => {
+      resultBox.innerHTML = "Error fetching data!";
+    });
+}
+</script>
+
+</body>
+</html>
