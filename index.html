@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Bill Info Fetch with Excel Export</title>
+  <title>Bulk Bill Data Export</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -13,17 +13,21 @@
       background: white;
       padding: 20px;
       border-radius: 10px;
-      max-width: 600px;
+      max-width: 800px;
       margin: auto;
       box-shadow: 0 0 10px #ddd;
     }
-    input, button {
+    textarea, input, button {
       width: 100%;
       padding: 12px;
       margin: 10px 0;
       font-size: 16px;
       border-radius: 6px;
       border: 1px solid #ccc;
+    }
+    textarea {
+      height: 150px;
+      resize: vertical;
     }
     button {
       background: black;
@@ -36,15 +40,33 @@
     }
     .export-btn {
       background: #28a745;
-      margin-top: 10px;
     }
     .export-btn:hover {
       background: #218838;
     }
-    .debug-btn {
-      background: #ffc107;
-      color: black;
+    .bulk-btn {
+      background: #007bff;
+    }
+    .bulk-btn:hover {
+      background: #0056b3;
+    }
+    .progress-container {
+      margin: 15px 0;
+      background: #f8f9fa;
+      border-radius: 5px;
+      padding: 10px;
+    }
+    .progress-bar {
+      height: 20px;
+      background: #007bff;
+      border-radius: 10px;
+      width: 0%;
+      transition: width 0.3s;
+    }
+    .status {
       margin-top: 10px;
+      font-size: 14px;
+      color: #666;
     }
     .result-box {
       background: #fff;
@@ -52,23 +74,17 @@
       margin-top: 15px;
       border-radius: 8px;
       white-space: pre-wrap;
-      font-size: 15px;
+      font-size: 14px;
       border-left: 4px solid #000;
       display: none;
     }
-    .debug-box {
-      background: #fff3cd;
-      padding: 15px;
-      margin-top: 15px;
-      border-radius: 8px;
-      white-space: pre-wrap;
-      font-size: 14px;
-      border-left: 4px solid #ffc107;
-      display: none;
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
     }
-    .loading {
-      color: #666;
-      font-style: italic;
+    .button-group button {
+      flex: 1;
     }
   </style>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
@@ -76,27 +92,40 @@
 <body>
 
 <div class="box">
-  <h2>Search Bill Details</h2>
+  <h2>Bulk Bill Data Export (Up to 500 Consumers)</h2>
 
-  <input id="consumer" type="text" placeholder="Enter Consumer Number">
-  <button onclick="fetchBill()">Get Bill Info</button>
-  <button class="debug-btn" onclick="showDebugInfo()" id="debugBtn" style="display:none;">Show All Fields</button>
-  <button class="export-btn" onclick="exportToExcel()" id="exportBtn" style="display:none;">Export to Excel</button>
+  <h3>Single Search</h3>
+  <input id="consumer" type="text" placeholder="Enter Single Consumer Number">
+  <button onclick="fetchSingleBill()">Get Single Bill Info</button>
 
-  <div id="result" class="result-box"></div>
-  <div id="debug" class="debug-box"></div>
+  <h3>Bulk Search</h3>
+  <textarea id="bulkConsumers" placeholder="Enter multiple Consumer Numbers (one per line)&#10;Example:&#10;2000279857&#10;2000279858&#10;2000279859"></textarea>
+  
+  <div class="button-group">
+    <button class="bulk-btn" onclick="startBulkProcessing()">Process Bulk Data</button>
+    <button class="export-btn" onclick="exportBulkToExcel()" id="bulkExportBtn" style="display:none;">Export All to Excel</button>
+  </div>
+
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+    <div class="status" id="progressStatus">Ready</div>
+  </div>
+
+  <div id="singleResult" class="result-box"></div>
+  <div id="bulkResult" class="result-box"></div>
 </div>
 
 <script>
-// Global variable to store bill data
+// Global variables
 let currentBillData = null;
+let bulkData = [];
+let processedCount = 0;
+let totalCount = 0;
 
-function fetchBill() {
+// Single bill fetch
+function fetchSingleBill() {
   const consumer = document.getElementById("consumer").value.trim();
-  const resultBox = document.getElementById("result");
-  const exportBtn = document.getElementById("exportBtn");
-  const debugBtn = document.getElementById("debugBtn");
-  const debugBox = document.getElementById("debug");
+  const resultBox = document.getElementById("singleResult");
 
   if (!consumer) {
     alert("Please enter Consumer Number!");
@@ -106,141 +135,190 @@ function fetchBill() {
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
 
   resultBox.style.display = "block";
-  debugBox.style.display = "none";
   resultBox.innerHTML = "Loading bill details...";
-  resultBox.className = "result-box loading";
-  exportBtn.style.display = "none";
-  debugBtn.style.display = "none";
 
   fetch(apiURL)
-    .then(res => {
-      if (!res.ok) {
-        throw new Error('Network response was not ok');
-      }
-      return res.json();
-    })
+    .then(res => res.json())
     .then(data => {
-      console.log("Full API Response:", data);
-      
-      // Store data for Excel export
       currentBillData = data;
-      
-      let finalText = "";
-
-      // Main information
-      finalText += "=== BILL INFORMATION ===\n\n";
-      finalText += `Status: ${data.status || 'N/A'}\n`;
-      finalText += `Bill Number: ${data.bill_number || 'N/A'}\n`;
-      finalText += `Timestamp: ${data.timestamp || 'N/A'}\n`;
-
-      // Handle nested data structure
-      if (data.data && data.data.d) {
-        finalText += "\n=== BILL DETAILS ===\n\n";
-        
-        const details = data.data.d;
-        
-        // Display all fields from the d object
-        for (let key in details) {
-          if (details.hasOwnProperty(key)) {
-            finalText += `${key}: ${details[key]}\n`;
-          }
-        }
-      } else {
-        finalText += "\nNo detailed bill information available.\n";
-      }
-
-      resultBox.innerHTML = finalText;
-      resultBox.className = "result-box";
-      exportBtn.style.display = "block";
-      debugBtn.style.display = "block";
-      
-      // Show debug info
-      showDebugInfo();
+      displaySingleResult(data, consumer, resultBox);
     })
     .catch(err => {
-      console.error("Error:", err);
-      resultBox.innerHTML = "Error fetching data! Please check:\n- Internet connection\n- Consumer number\n- Try again later";
-      resultBox.className = "result-box";
-      exportBtn.style.display = "none";
-      debugBtn.style.display = "none";
+      resultBox.innerHTML = "Error fetching data!";
     });
 }
 
-function showDebugInfo() {
-  if (!currentBillData) return;
-  
-  const debugBox = document.getElementById("debug");
-  let debugText = "=== ALL AVAILABLE FIELDS ===\n\n";
-  
-  debugText += "Main Data Fields:\n";
-  for (let key in currentBillData) {
-    if (currentBillData.hasOwnProperty(key) && key !== "data") {
-      debugText += `📌 ${key}: ${currentBillData[key]}\n`;
-    }
-  }
-  
-  if (currentBillData.data && currentBillData.data.d) {
-    debugText += "\nData.d Fields:\n";
-    const details = currentBillData.data.d;
+function displaySingleResult(data, consumer, resultBox) {
+  let finalText = "=== BILL INFORMATION ===\n\n";
+  finalText += `Consumer Number: ${consumer}\n`;
+  finalText += `Status: ${data.status || 'N/A'}\n`;
+  finalText += `Bill Number: ${data.bill_number || 'N/A'}\n`;
+
+  if (data.data && data.data.d) {
+    const details = data.data.d;
+    finalText += "\n=== BILL DETAILS ===\n\n";
     for (let key in details) {
       if (details.hasOwnProperty(key)) {
-        debugText += `✅ ${key}: ${details[key]}\n`;
+        finalText += `${key}: ${details[key]}\n`;
       }
     }
   }
-  
-  debugBox.innerHTML = debugText;
-  debugBox.style.display = "block";
+
+  resultBox.innerHTML = finalText;
 }
 
-function exportToExcel() {
-  if (!currentBillData) {
+// Bulk processing functions
+function startBulkProcessing() {
+  const consumerText = document.getElementById("bulkConsumers").value.trim();
+  const bulkResultBox = document.getElementById("bulkResult");
+  const exportBtn = document.getElementById("bulkExportBtn");
+
+  if (!consumerText) {
+    alert("Please enter Consumer Numbers!");
+    return;
+  }
+
+  const consumers = consumerText.split('\n')
+    .map(c => c.trim())
+    .filter(c => c.length > 0);
+
+  if (consumers.length > 500) {
+    alert(`Maximum 500 consumers allowed. You entered ${consumers.length}`);
+    return;
+  }
+
+  totalCount = consumers.length;
+  processedCount = 0;
+  bulkData = [];
+  
+  bulkResultBox.style.display = "block";
+  bulkResultBox.innerHTML = `Starting bulk processing for ${totalCount} consumers...\n\n`;
+  exportBtn.style.display = "none";
+
+  updateProgress(0, `Starting... (0/${totalCount})`);
+
+  // Process consumers one by one with delay to avoid rate limiting
+  processNextConsumer(consumers, 0);
+}
+
+function processNextConsumer(consumers, index) {
+  if (index >= consumers.length) {
+    bulkProcessingComplete();
+    return;
+  }
+
+  const consumer = consumers[index];
+  const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
+
+  fetch(apiURL)
+    .then(res => res.json())
+    .then(data => {
+      processedCount++;
+      
+      // Extract data
+      const details = data.data?.d || {};
+      const name = findField(details, ['consumerName', 'name', 'customerName', 'accountName']);
+      const mobile = findField(details, ['mobileNo', 'mobile', 'phone', 'contactNo', 'phoneNumber']);
+      
+      // Store in bulk data array
+      bulkData.push({
+        'Name': name,
+        'Consumer No': consumer,
+        'Mobile Number': mobile,
+        'Bill Number': data.bill_number || 'N/A',
+        'Status': data.status || 'N/A'
+      });
+
+      // Update progress
+      const progress = Math.round((processedCount / totalCount) * 100);
+      updateProgress(progress, `Processed: ${processedCount}/${totalCount} - ${consumer}`);
+
+      // Update results
+      updateBulkResults();
+
+      // Process next consumer after delay (to avoid rate limiting)
+      setTimeout(() => {
+        processNextConsumer(consumers, index + 1);
+      }, 500); // 500ms delay between requests
+
+    })
+    .catch(err => {
+      processedCount++;
+      
+      // Store error data
+      bulkData.push({
+        'Name': 'Error',
+        'Consumer No': consumer,
+        'Mobile Number': 'Fetch Failed',
+        'Bill Number': 'N/A',
+        'Status': 'Error'
+      });
+
+      const progress = Math.round((processedCount / totalCount) * 100);
+      updateProgress(progress, `Error: ${processedCount}/${totalCount} - ${consumer}`);
+      updateBulkResults();
+
+      // Continue with next consumer
+      setTimeout(() => {
+        processNextConsumer(consumers, index + 1);
+      }, 500);
+    });
+}
+
+function updateProgress(progress, status) {
+  document.getElementById('progressBar').style.width = progress + '%';
+  document.getElementById('progressStatus').textContent = status;
+}
+
+function updateBulkResults() {
+  const bulkResultBox = document.getElementById("bulkResult");
+  let resultText = `Bulk Processing: ${processedCount}/${totalCount} completed\n\n`;
+  resultText += "Recent entries:\n";
+  
+  // Show last 10 entries
+  const recentEntries = bulkData.slice(-10);
+  recentEntries.forEach(entry => {
+    resultText += `✓ ${entry['Consumer No']}: ${entry['Name']} - ${entry['Mobile Number']}\n`;
+  });
+  
+  if (processedCount === totalCount) {
+    resultText += `\n✅ Processing complete! ${bulkData.length} records collected.`;
+  }
+  
+  bulkResultBox.innerHTML = resultText;
+}
+
+function bulkProcessingComplete() {
+  const exportBtn = document.getElementById("bulkExportBtn");
+  exportBtn.style.display = "block";
+  updateProgress(100, `Complete! ${totalCount} consumers processed`);
+  
+  // Show summary
+  const successful = bulkData.filter(item => item.Status !== 'Error').length;
+  const failed = bulkData.filter(item => item.Status === 'Error').length;
+  
+  alert(`Bulk processing complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\nTotal: ${totalCount}`);
+}
+
+function exportBulkToExcel() {
+  if (bulkData.length === 0) {
     alert("No data to export!");
     return;
   }
 
   try {
-    // Prepare data for Excel - ONLY 3 COLUMNS
-    const excelData = [];
-    
-    // Extract data from API response
-    const details = currentBillData.data?.d || {};
-    
-    // Find actual field names by checking all possibilities
-    const name = findField(details, [
-      'consumerName', 'name', 'customerName', 'accountName', 
-      'ConsumerName', 'Name', 'CustomerName', 'consumer_name'
-    ]);
-    
-    const mobile = findField(details, [
-      'mobileNo', 'mobile', 'phone', 'contactNo', 'phoneNumber',
-      'MobileNo', 'Mobile', 'Phone', 'ContactNo', 'mobile_number',
-      'contact', 'Contact', 'phone_no'
-    ]);
-    
-    const consumerNo = document.getElementById("consumer").value.trim();
-    
-    const rowData = {
-      'Name': name,
-      'Consumer No': consumerNo,
-      'Mobile Number': mobile
-    };
-    
-    excelData.push(rowData);
-    
     // Create worksheet
-    const ws = XLSX.utils.json_to_sheet(excelData);
+    const ws = XLSX.utils.json_to_sheet(bulkData);
     
     // Create workbook
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Bill Data");
+    XLSX.utils.book_append_sheet(wb, ws, "Bulk Bill Data");
     
     // Generate Excel file and download
-    const fileName = `Bill_Data_${consumerNo}.xlsx`;
-    
+    const fileName = `Bulk_Bill_Data_${new Date().getTime()}.xlsx`;
     XLSX.writeFile(wb, fileName);
     
-    alert(`Data exported successfully!\n\nName: ${name}\nMobile: ${mobile}`);
+    alert(`Exported ${bulkData.length} records to Excel successfully!`);
     
   } catch (error) {
     console.error("Export error:", error);
@@ -261,7 +339,7 @@ function findField(details, possibleNames) {
 // Enter key support
 document.getElementById("consumer").addEventListener("keypress", function(event) {
   if (event.key === "Enter") {
-    fetchBill();
+    fetchSingleBill();
   }
 });
 </script>
