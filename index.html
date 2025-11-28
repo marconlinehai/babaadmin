@@ -106,7 +106,7 @@
 <body>
 
 <div class="box">
-  <h2>Bulk Bill Data Export (Up to 500 Consumers)</h2>
+  <h2>Admin Baba Kismat 2.o</h2>
 
   <h3>Single Search</h3>
   <input id="consumer" type="text" placeholder="Enter Single Consumer Number">
@@ -149,16 +149,19 @@ function fetchSingleBill() {
   const resultBox = document.getElementById("singleResult");
   const debugBtn = document.getElementById("singleDebugBtn");
 
+  // Reset previous single search
+  resultBox.innerHTML = "";
+  resultBox.style.display = "block";
+  document.getElementById("singleDebug").style.display = "none";
+  debugBtn.style.display = "none";
+
   if (!consumer) {
     alert("Please enter Consumer Number!");
     return;
   }
 
   const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
-
-  resultBox.style.display = "block";
   resultBox.innerHTML = "Loading bill details...";
-  debugBtn.style.display = "none";
 
   fetch(apiURL)
     .then(res => res.json())
@@ -196,7 +199,6 @@ function showSingleDebug() {
   
   const debugBox = document.getElementById("singleDebug");
   let debugText = "=== DEBUG FIELD INFORMATION ===\n\n";
-  
   debugText += "Looking for Name and Mobile fields...\n\n";
   
   if (currentBillData.data && currentBillData.data.d) {
@@ -209,14 +211,12 @@ function showSingleDebug() {
     for (let key in details) {
       debugText += `🔍 ${key}: ${details[key]}\n`;
       
-      // Check for name fields
       if (key.toLowerCase().includes('name') && !foundName) {
         debugText += `   ✅ POTENTIAL NAME FIELD: ${key}\n`;
         fieldMap.name = key;
         foundName = true;
       }
       
-      // Check for mobile fields
       if ((key.toLowerCase().includes('mobile') || key.toLowerCase().includes('phone')) && !foundMobile) {
         debugText += `   ✅ POTENTIAL MOBILE FIELD: ${key}\n`;
         fieldMap.mobile = key;
@@ -264,19 +264,21 @@ function startBulkProcessing() {
     return;
   }
 
-  totalCount = consumers.length;
-  processedCount = 0;
+  // Reset previous bulk processing
   bulkData = [];
+  processedCount = 0;
   fieldMap = {};
+  bulkResultBox.innerHTML = "";
+  exportBtn.style.display = "none";
+  debugBtn.style.display = "none";
+  document.getElementById("bulkDebug").style.display = "none";
+
+  totalCount = consumers.length;
   
   bulkResultBox.style.display = "block";
   bulkResultBox.innerHTML = `Starting bulk processing for ${totalCount} consumers...\n\n`;
-  exportBtn.style.display = "none";
-  debugBtn.style.display = "none";
-
   updateProgress(0, `Starting... (0/${totalCount})`);
 
-  // Process consumers one by one with delay to avoid rate limiting
   processNextConsumer(consumers, 0);
 }
 
@@ -293,100 +295,65 @@ function processNextConsumer(consumers, index) {
     .then(res => res.json())
     .then(data => {
       processedCount++;
-      
-      // Extract data with smart field detection
       const details = data.data?.d || {};
       
-      // Auto-detect fields on first successful response
-      if (processedCount === 1 && details) {
-        autoDetectFields(details);
-      }
+      if (processedCount === 1 && details) autoDetectFields(details);
       
       const name = extractField(details, 'name');
       const mobile = extractField(details, 'mobile');
       
-      // Store in bulk data array
-      bulkData.push({
-        'Name': name,
-        'Consumer No': consumer,
-        'Mobile Number': mobile,
-        'Bill Number': data.bill_number || 'N/A',
-        'Status': data.status || 'N/A',
-        'Raw Data': JSON.stringify(details) // For debugging
-      });
+      // Prevent duplicate consumer entry
+      if (!bulkData.some(item => item['Consumer No'] === consumer)) {
+        bulkData.push({
+          'Name': name,
+          'Consumer No': consumer,
+          'Mobile Number': mobile,
+          'Bill Number': data.bill_number || 'N/A',
+          'Status': data.status || 'N/A',
+          'Raw Data': JSON.stringify(details)
+        });
+      }
 
-      // Update progress
-      const progress = Math.round((processedCount / totalCount) * 100);
-      updateProgress(progress, `Processed: ${processedCount}/${totalCount} - ${consumer}`);
-
-      // Update results
+      updateProgress(Math.round((processedCount / totalCount) * 100), `Processed: ${processedCount}/${totalCount} - ${consumer}`);
       updateBulkResults();
 
-      // Process next consumer after delay
-      setTimeout(() => {
-        processNextConsumer(consumers, index + 1);
-      }, 500);
+      setTimeout(() => processNextConsumer(consumers, index + 1), 500);
 
     })
     .catch(err => {
       processedCount++;
-      
-      // Store error data
-      bulkData.push({
-        'Name': 'Error',
-        'Consumer No': consumer,
-        'Mobile Number': 'Fetch Failed',
-        'Bill Number': 'N/A',
-        'Status': 'Error'
-      });
+      if (!bulkData.some(item => item['Consumer No'] === consumer)) {
+        bulkData.push({
+          'Name': 'Error',
+          'Consumer No': consumer,
+          'Mobile Number': 'Fetch Failed',
+          'Bill Number': 'N/A',
+          'Status': 'Error'
+        });
+      }
 
-      const progress = Math.round((processedCount / totalCount) * 100);
-      updateProgress(progress, `Error: ${processedCount}/${totalCount} - ${consumer}`);
+      updateProgress(Math.round((processedCount / totalCount) * 100), `Error: ${processedCount}/${totalCount} - ${consumer}`);
       updateBulkResults();
 
-      // Continue with next consumer
-      setTimeout(() => {
-        processNextConsumer(consumers, index + 1);
-      }, 500);
+      setTimeout(() => processNextConsumer(consumers, index + 1), 500);
     });
 }
 
 function autoDetectFields(details) {
-  // Auto-detect name field
   for (let key in details) {
-    if (key.toLowerCase().includes('name')) {
-      fieldMap.name = key;
-      break;
-    }
+    if (key.toLowerCase().includes('name')) fieldMap.name = key;
+    if (key.toLowerCase().includes('mobile') || key.toLowerCase().includes('phone')) fieldMap.mobile = key;
   }
-  
-  // Auto-detect mobile field
-  for (let key in details) {
-    if (key.toLowerCase().includes('mobile') || key.toLowerCase().includes('phone')) {
-      fieldMap.mobile = key;
-      break;
-    }
-  }
-  
-  console.log("Auto-detected field map:", fieldMap);
 }
 
 function extractField(details, fieldType) {
-  if (fieldMap[fieldType]) {
-    return details[fieldMap[fieldType]] || 'Not Available';
-  }
-  
-  // Fallback to manual search
+  if (fieldMap[fieldType]) return details[fieldMap[fieldType]] || 'Not Available';
   const searchTerms = fieldType === 'name' 
-    ? ['name', 'consumerName', 'customerName', 'accountName']
-    : ['mobile', 'phone', 'mobileNo', 'phoneNumber', 'contactNo'];
-  
+    ? ['name','consumerName','customerName','accountName']
+    : ['mobile','phone','mobileNo','phoneNumber','contactNo'];
   for (let term of searchTerms) {
-    if (details[term] !== undefined && details[term] !== null && details[term] !== '') {
-      return details[term];
-    }
+    if (details[term]) return details[term];
   }
-  
   return 'Not Available';
 }
 
@@ -398,92 +365,55 @@ function updateProgress(progress, status) {
 function updateBulkResults() {
   const bulkResultBox = document.getElementById("bulkResult");
   let resultText = `Bulk Processing: ${processedCount}/${totalCount} completed\n\n`;
-  resultText += "Field Mapping: ";
-  resultText += `Name: ${fieldMap.name || 'Not found'}, `;
-  resultText += `Mobile: ${fieldMap.mobile || 'Not found'}\n\n`;
+  resultText += `Field Mapping: Name: ${fieldMap.name || 'Not found'}, Mobile: ${fieldMap.mobile || 'Not found'}\n\n`;
   resultText += "Recent entries:\n";
-  
-  const recentEntries = bulkData.slice(-5);
-  recentEntries.forEach(entry => {
+  bulkData.slice(-5).forEach(entry => {
     resultText += `✓ ${entry['Consumer No']}: ${entry['Name']} - ${entry['Mobile Number']}\n`;
   });
-  
-  if (processedCount === totalCount) {
-    resultText += `\n✅ Processing complete! ${bulkData.length} records collected.`;
-  }
-  
+  if (processedCount === totalCount) resultText += `\n✅ Processing complete! ${bulkData.length} records collected.`;
   bulkResultBox.innerHTML = resultText;
 }
 
 function showBulkDebug() {
   const debugBox = document.getElementById("bulkDebug");
   let debugText = "=== BULK FIELD ANALYSIS ===\n\n";
-  
-  debugText += `Detected Field Map:\n`;
-  debugText += `Name Field: ${fieldMap.name || 'Not detected'}\n`;
-  debugText += `Mobile Field: ${fieldMap.mobile || 'Not detected'}\n\n`;
-  
+  debugText += `Detected Field Map:\nName Field: ${fieldMap.name || 'Not detected'}\nMobile Field: ${fieldMap.mobile || 'Not detected'}\n\n`;
   debugText += "Sample Data:\n";
-  const sampleData = bulkData.slice(0, 3);
-  sampleData.forEach((item, index) => {
-    debugText += `\nSample ${index + 1}:\n`;
-    debugText += `Consumer: ${item['Consumer No']}\n`;
-    debugText += `Name: ${item['Name']}\n`;
-    debugText += `Mobile: ${item['Mobile Number']}\n`;
-    debugText += `Raw: ${item['Raw Data']}\n`;
+  bulkData.slice(0,3).forEach((item,i) => {
+    debugText += `\nSample ${i+1}:\nConsumer: ${item['Consumer No']}\nName: ${item['Name']}\nMobile: ${item['Mobile Number']}\nRaw: ${item['Raw Data']}\n`;
   });
-  
   debugBox.innerHTML = debugText;
   debugBox.style.display = "block";
 }
 
 function bulkProcessingComplete() {
-  const exportBtn = document.getElementById("bulkExportBtn");
-  const debugBtn = document.getElementById("bulkDebugBtn");
-  
-  exportBtn.style.display = "block";
-  debugBtn.style.display = "block";
+  document.getElementById("bulkExportBtn").style.display = "block";
+  document.getElementById("bulkDebugBtn").style.display = "block";
   updateProgress(100, `Complete! ${totalCount} consumers processed`);
-  
   const successful = bulkData.filter(item => item.Status !== 'Error').length;
   const failed = bulkData.filter(item => item.Status === 'Error').length;
-  
   alert(`Bulk processing complete!\n\nSuccessful: ${successful}\nFailed: ${failed}\nTotal: ${totalCount}\n\nCheck field mapping before export.`);
 }
 
 function exportBulkToExcel() {
-  if (bulkData.length === 0) {
-    alert("No data to export!");
-    return;
-  }
+  if (bulkData.length === 0) { alert("No data to export!"); return; }
 
-  try {
-    // Remove raw data before export
-    const exportData = bulkData.map(item => {
-      const { RawData, ...cleanItem } = item;
-      return cleanItem;
-    });
-    
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Bulk Bill Data");
-    
-    const fileName = `Bulk_Bill_Data_${new Date().getTime()}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-    
-    alert(`Exported ${bulkData.length} records to Excel successfully!`);
-    
-  } catch (error) {
-    console.error("Export error:", error);
-    alert("Error exporting to Excel: " + error.message);
-  }
+  const exportData = bulkData
+    .filter(item => item['Mobile Number'] && item['Mobile Number'] !== 'Not Available' && item['Mobile Number'] !== 'Fetch Failed')
+    .map(({RawData,...rest}) => rest);
+
+  if (exportData.length === 0) { alert("No records with Mobile Number found to export!"); return; }
+
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Bulk Bill Data");
+  XLSX.writeFile(wb, `Bulk_Bill_Data_${Date.now()}.xlsx`);
+  alert(`Exported ${exportData.length} records with Mobile Number to Excel successfully!`);
 }
 
 // Enter key support
 document.getElementById("consumer").addEventListener("keypress", function(event) {
-  if (event.key === "Enter") {
-    fetchSingleBill();
-  }
+  if (event.key === "Enter") fetchSingleBill();
 });
 </script>
 
