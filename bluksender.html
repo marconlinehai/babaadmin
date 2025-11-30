@@ -41,7 +41,7 @@ fileInput.addEventListener('change', (e) => {
       const consumer = row['Consumer No'] || '';
       const number = row['Mobile Number'] || '';
       if(name && consumer && number){
-        const waLink = `https://wa.me/${number}?text=*Dear NPCL* ${name},%0AYour electricity bill for the previous month has not been updated. As per NPCL guidelines, your ${consumer} connection may be *disconnected today* by 10:30 PM.%0APlease contact the NPCL officer *immediately* and update your bill.%0A%0ANPCL Helpline: 8935980479%0A— NPCL Billing Department`;
+        const waLink = `https://wa.me/${number}?text=*Dear NPCL* ${name},%0AYour electricity bill for the previous month has not been updated. As per NPCL guidelines, your ${consumer} connection may be *disconnected today* by 10:30 PM.%0APlease contact the NPCL officer *immediately* and update your bill.%0A%0ANPCL Helpline: 9771204314%0A— NPCL Billing Department`;
         const a = document.createElement('a');
         a.href = waLink;
         a.target = "_blank";
