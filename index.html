@@ -69,7 +69,7 @@
 
 <script>
 // ========== LOGIN SYSTEM ============
-const PASSWORD = "1234"; // apna password yaha change kar lo
+const PASSWORD = "1234"; 
 if (localStorage.getItem("loggedIn") === "yes") {
   document.getElementById("loginBox").style.display = "none";
   document.getElementById("app").style.display = "block";
@@ -86,7 +86,7 @@ function doLogin() {
 // ========== HELPER: GET FIRST NAME ==========
 function getFirstName(fullName) {
   if (!fullName) return "";
-  return fullName.split(" ")[0]; // first word only
+  return fullName.split(" ")[0];
 }
 
 // ======================= ORIGINAL SCRIPT (UNCHANGED) ============================
@@ -124,8 +124,8 @@ function fetchSingleBill() {
 function displaySingleResult(data, consumer, resultBox) {
   let finalText = "=== BILL INFORMATION ===\n\n";
   finalText += `Consumer Number: ${consumer}\n`;
-  finalText += `Status: ${data.status || 'N/A'}\n`;
-  finalText += `Bill Number: ${data.bill_number || 'N/A'}\n`;
+  finalText += `Status: ${data.status || ''}\n`;
+  finalText += `Bill Number: ${data.bill_number || ''}\n`;
 
   if (data.data?.d) {
     finalText += "\n=== BILL DETAILS ===\n\n";
@@ -144,9 +144,7 @@ function showSingleDebug() {
   const debugBox = document.getElementById("singleDebug");
   const details = currentBillData.data?.d || {};
   let debugText = "=== DEBUG FIELD INFORMATION ===\n\n";
-  for (let key in details) {
-    debugText += `${key}: ${details[key]}\n`;
-  }
+  for (let key in details) { debugText += `${key}: ${details[key]}\n`; }
   debugBox.innerHTML = debugText;
   debugBox.style.display = "block";
 }
@@ -155,7 +153,6 @@ function showSingleDebug() {
 function startBulkProcessing() {
   const text = document.getElementById("bulkConsumers").value.trim();
   const resultBox = document.getElementById("bulkResult");
-
   if (!text) return alert("Please enter Consumer Numbers!");
   const consumers = text.split('\n').map(c => c.trim()).filter(c => c.length > 0);
 
@@ -263,13 +260,17 @@ function showBulkDebug() {
   debugBox.style.display = "block";
 }
 
+// ======================= EXPORT EXCEL (FIRST NAME ONLY) ============================
 function exportBulkToExcel() {
   if (bulkData.length === 0) return alert("No data to export!");
-
   const cleanData = bulkData.map(({ RawData, ...rest }) => {
     const filtered = {};
     for (let key in rest) {
-      if(rest[key] && rest[key] !== "Not Available" && rest[key] !== "N/A") filtered[key] = rest[key];
+      let value = rest[key];
+      if(value && value !== "Not Available" && value !== "N/A"){
+        if(key === "Name") value = getFirstName(value); // first name only
+        filtered[key] = value;
+      }
     }
     return filtered;
   });
