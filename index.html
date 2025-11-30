@@ -4,107 +4,39 @@
   <meta charset="UTF-8">
   <title>Bulk Bill Data Export</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      padding: 20px;
-    }
-    .box {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      max-width: 800px;
-      margin: auto;
-      box-shadow: 0 0 10px #ddd;
-    }
-    textarea, input, button {
-      width: 100%;
-      padding: 12px;
-      margin: 10px 0;
-      font-size: 16px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    textarea {
-      height: 150px;
-      resize: vertical;
-    }
-    button {
-      background: black;
-      color: white;
-      cursor: pointer;
-      border: none;
-    }
-    button:hover {
-      background: #333;
-    }
-    .export-btn {
-      background: #28a745;
-    }
-    .export-btn:hover {
-      background: #218838;
-    }
-    .bulk-btn {
-      background: #007bff;
-    }
-    .bulk-btn:hover {
-      background: #0056b3;
-    }
-    .debug-btn {
-      background: #ffc107;
-      color: black;
-    }
-    .progress-container {
-      margin: 15px 0;
-      background: #f8f9fa;
-      border-radius: 5px;
-      padding: 10px;
-    }
-    .progress-bar {
-      height: 20px;
-      background: #007bff;
-      border-radius: 10px;
-      width: 0%;
-      transition: width 0.3s;
-    }
-    .status {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #666;
-    }
-    .result-box {
-      background: #fff;
-      padding: 15px;
-      margin-top: 15px;
-      border-radius: 8px;
-      white-space: pre-wrap;
-      font-size: 14px;
-      border-left: 4px solid #000;
-      display: none;
-    }
-    .debug-box {
-      background: #fff3cd;
-      padding: 15px;
-      margin-top: 15px;
-      border-radius: 8px;
-      white-space: pre-wrap;
-      font-size: 12px;
-      border-left: 4px solid #ffc107;
-      display: none;
-    }
-    .button-group {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .button-group button {
-      flex: 1;
-    }
+    body { font-family: Arial, sans-serif; background: #f2f2f2; padding: 20px; }
+    .box { background: white; padding: 20px; border-radius: 10px; max-width: 800px; margin: auto; box-shadow: 0 0 10px #ddd; }
+    textarea, input, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
+    textarea { height: 150px; resize: vertical; }
+    button { background: black; color: white; cursor: pointer; border: none; }
+    button:hover { background: #333; }
+    .export-btn { background: #28a745; }
+    .export-btn:hover { background: #218838; }
+    .bulk-btn { background: #007bff; }
+    .bulk-btn:hover { background: #0056b3; }
+    .debug-btn { background: #ffc107; color: black; }
+    .progress-container { margin: 15px 0; background: #f8f9fa; border-radius: 5px; padding: 10px; }
+    .progress-bar { height: 20px; background: #007bff; border-radius: 10px; width: 0%; transition: width 0.3s; }
+    .status { margin-top: 10px; font-size: 14px; color: #666; }
+    .result-box { background: #fff; padding: 15px; margin-top: 15px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; border-left: 4px solid #000; display: none; }
+    .debug-box { background: #fff3cd; padding: 15px; margin-top: 15px; border-radius: 8px; white-space: pre-wrap; font-size: 12px; border-left: 4px solid #ffc107; display: none; }
+    .button-group { display: flex; gap: 10px; margin-top: 10px; }
+    .button-group button { flex: 1; }
+    #loginBox { max-width: 350px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
   </style>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="loginBox">
+  <h2>Login</h2>
+  <input type="password" id="loginPass" placeholder="Enter Password">
+  <button onclick="doLogin()">Login</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none;">
 <div class="box">
   <h2>Admin Baba Kismat 2.o</h2>
 
@@ -116,8 +48,7 @@
   </div>
 
   <h3>Bulk Search</h3>
-  <textarea id="bulkConsumers" placeholder="Enter multiple Consumer Numbers (one per line)&#10;Example:&#10;2000279857&#10;2000279858&#10;2000279859"></textarea>
-  
+  <textarea id="bulkConsumers" placeholder="Enter multiple Consumer Numbers (one per line)"></textarea>
   <div class="button-group">
     <button class="bulk-btn" onclick="startBulkProcessing()">Process Bulk Data</button>
     <button class="export-btn" onclick="exportBulkToExcel()" id="bulkExportBtn" style="display:none;">Export All to Excel</button>
@@ -134,16 +65,37 @@
   <div id="bulkResult" class="result-box"></div>
   <div id="bulkDebug" class="debug-box"></div>
 </div>
+</div>
 
 <script>
-// Global Variables
+// ========== LOGIN SYSTEM ============
+const PASSWORD = "1234"; // apna password yaha change kar lo
+if (localStorage.getItem("loggedIn") === "yes") {
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("app").style.display = "block";
+}
+function doLogin() {
+  let p = document.getElementById("loginPass").value;
+  if (p === PASSWORD) {
+    localStorage.setItem("loggedIn", "yes");
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("app").style.display = "block";
+  } else { alert("Wrong Password!"); }
+}
+
+// ========== HELPER: GET FIRST NAME ==========
+function getFirstName(fullName) {
+  if (!fullName) return "";
+  return fullName.split(" ")[0]; // first word only
+}
+
+// ======================= ORIGINAL SCRIPT (UNCHANGED) ============================
 let currentBillData = null;
 let bulkData = [];
 let processedCount = 0;
 let totalCount = 0;
 let fieldMap = {};
 
-// ======================= SINGLE SEARCH ============================
 function fetchSingleBill() {
   const consumer = document.getElementById("consumer").value.trim();
   const resultBox = document.getElementById("singleResult");
@@ -166,9 +118,7 @@ function fetchSingleBill() {
       displaySingleResult(data, consumer, resultBox);
       debugBtn.style.display = "block";
     })
-    .catch(() => {
-      resultBox.innerHTML = "Error fetching data!";
-    });
+    .catch(() => { resultBox.innerHTML = "Error fetching data!"; });
 }
 
 function displaySingleResult(data, consumer, resultBox) {
@@ -181,24 +131,22 @@ function displaySingleResult(data, consumer, resultBox) {
     finalText += "\n=== BILL DETAILS ===\n\n";
     const details = data.data.d;
     for (let key in details) {
-      finalText += `${key}: ${details[key]}\n`;
+      if(details[key] && details[key] !== "Not Available" && details[key] !== "N/A") {
+        finalText += `${key}: ${details[key]}\n`;
+      }
     }
   }
-
   resultBox.innerHTML = finalText;
 }
 
 function showSingleDebug() {
   if (!currentBillData) return;
-  
   const debugBox = document.getElementById("singleDebug");
   const details = currentBillData.data?.d || {};
   let debugText = "=== DEBUG FIELD INFORMATION ===\n\n";
-  
   for (let key in details) {
     debugText += `${key}: ${details[key]}\n`;
   }
-
   debugBox.innerHTML = debugText;
   debugBox.style.display = "block";
 }
@@ -209,7 +157,6 @@ function startBulkProcessing() {
   const resultBox = document.getElementById("bulkResult");
 
   if (!text) return alert("Please enter Consumer Numbers!");
-
   const consumers = text.split('\n').map(c => c.trim()).filter(c => c.length > 0);
 
   bulkData = [];
@@ -217,7 +164,6 @@ function startBulkProcessing() {
   fieldMap = {};
   resultBox.innerHTML = "";
   resultBox.style.display = "block";
-
   totalCount = consumers.length;
 
   updateProgress(0, `Starting... 0/${totalCount}`);
@@ -237,86 +183,63 @@ function processNextConsumer(consumers, index) {
     .then(data => {
       processedCount++;
       const details = data.data?.d || {};
-
       if (processedCount === 1) autoDetectFields(details);
 
-      const name = extractField(details, "name");
-      const mobile = extractField(details, "mobile");
+      let name = extractField(details, "name");
+      name = getFirstName(name); // first name only
+      let mobile = extractField(details, "mobile");
+      if(mobile === "Not Available" || mobile === "N/A") mobile = "";
 
       bulkData.push({
         "Name": name,
         "Consumer No": consumer,
         "Mobile Number": mobile,
-        "Bill Number": data.bill_number || "N/A",
-        "Status": data.status || "N/A",
+        "Bill Number": data.bill_number || "",
+        "Status": data.status || "",
         "Raw Data": JSON.stringify(details)
       });
 
       updateProgress(Math.round((processedCount / totalCount) * 100), `${processedCount}/${totalCount}`);
       updateBulkResults();
-
       setTimeout(() => processNextConsumer(consumers, index + 1), 400);
     })
     .catch(() => {
       processedCount++;
       bulkData.push({
-        "Name": "Error",
+        "Name": "",
         "Consumer No": consumer,
-        "Mobile Number": "Fetch Failed",
-        "Bill Number": "N/A",
+        "Mobile Number": "",
+        "Bill Number": "",
         "Status": "Error"
       });
-
       updateProgress(Math.round((processedCount / totalCount) * 100), `${processedCount}/${totalCount}`);
       updateBulkResults();
-
       setTimeout(() => processNextConsumer(consumers, index + 1), 400);
     });
 }
 
-// ======================= FIXED FIELD DETECTION ============================
 function autoDetectFields(details) {
   for (let key in details) {
     const k = key.toLowerCase();
-
-    if (!fieldMap.name && (
-      k.includes("name") ||
-      k.includes("cname") ||
-      k.includes("cust") ||
-      k.includes("consumername") ||
-      k.includes("owner") ||
-      k.includes("accountname")
-    )) {
+    if (!fieldMap.name && (k.includes("name") || k.includes("cname") || k.includes("cust") || k.includes("consumername") || k.includes("owner") || k.includes("accountname"))) {
       fieldMap.name = key;
     }
-
-    if (!fieldMap.mobile && (
-      k.includes("mobile") ||
-      k.includes("phone") ||
-      k.includes("contact") ||
-      k.includes("tel")
-    )) {
+    if (!fieldMap.mobile && (k.includes("mobile") || k.includes("phone") || k.includes("contact") || k.includes("tel"))) {
       fieldMap.mobile = key;
     }
   }
 }
 
 function extractField(details, type) {
-  if (fieldMap[type]) return details[fieldMap[type]] || "Not Available";
-
-  const terms = type === "name"
-    ? ["name","cname","cust","consumer","owner","account"]
-    : ["mobile","phone","contact","tel"];
-
+  if (fieldMap[type]) return details[fieldMap[type]] || "";
+  const terms = type === "name" ? ["name","cname","cust","consumer","owner","account"] : ["mobile","phone","contact","tel"];
   for (let key in details) {
     const k = key.toLowerCase();
     if (terms.some(t => k.includes(t))) return details[key];
   }
-
-  return "Not Available";
+  return "";
 }
 
-// ======================= UI HELPERS ============================
 function updateProgress(percent, text) {
   document.getElementById("progressBar").style.width = percent + "%";
   document.getElementById("progressStatus").innerText = text;
@@ -324,44 +247,37 @@ function updateProgress(percent, text) {
 
 function updateBulkResults() {
   const resultBox = document.getElementById("bulkResult");
-  resultBox.innerHTML =
-    `Processed: ${processedCount}/${totalCount}\n\n` +
-    `Detected Fields → Name: ${fieldMap.name || "❌"}, Mobile: ${fieldMap.mobile || "❌"}\n\n` +
-    `Last Entry:\n${JSON.stringify(bulkData[bulkData.length - 1], null, 2)}`;
+  resultBox.innerHTML = `Processed: ${processedCount}/${totalCount}\n\nDetected Fields → Name: ${fieldMap.name || "❌"}, Mobile: ${fieldMap.mobile || "❌"}\n\nLast Entry:\n${JSON.stringify(bulkData[bulkData.length - 1], null, 2)}`;
 }
 
 function bulkProcessingComplete() {
   updateProgress(100, "Completed!");
-
   document.getElementById("bulkExportBtn").style.display = "block";
   document.getElementById("bulkDebugBtn").style.display = "block";
-
   alert("Bulk Processing Completed!");
 }
 
 function showBulkDebug() {
   const debugBox = document.getElementById("bulkDebug");
-
-  debugBox.innerHTML =
-    `=== FIELD MAPPING ===\n\nName → ${fieldMap.name}\nMobile → ${fieldMap.mobile}\n\n` +
-    `=== SAMPLE DATA ===\n` +
-    JSON.stringify(bulkData.slice(0, 5), null, 2);
-
+  debugBox.innerHTML = `=== FIELD MAPPING ===\n\nName → ${fieldMap.name}\nMobile → ${fieldMap.mobile}\n\n=== SAMPLE DATA ===\n` + JSON.stringify(bulkData.slice(0, 5), null, 2);
   debugBox.style.display = "block";
 }
 
-// ======================= EXPORT EXCEL ============================
 function exportBulkToExcel() {
   if (bulkData.length === 0) return alert("No data to export!");
 
-  const cleanData = bulkData.map(({ RawData, ...rest }) => rest);
+  const cleanData = bulkData.map(({ RawData, ...rest }) => {
+    const filtered = {};
+    for (let key in rest) {
+      if(rest[key] && rest[key] !== "Not Available" && rest[key] !== "N/A") filtered[key] = rest[key];
+    }
+    return filtered;
+  });
 
   const ws = XLSX.utils.json_to_sheet(cleanData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Bulk Bill Data");
-
   XLSX.writeFile(wb, `Bulk_Bill_Data_${Date.now()}.xlsx`);
-
   alert("Excel Export Successful!");
 }
 </script>
