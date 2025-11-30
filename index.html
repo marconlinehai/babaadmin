@@ -40,6 +40,7 @@
 <div class="box">
   <h2>Admin Baba Kismat 2.o</h2>
 
+  <!-- SINGLE SEARCH -->
   <h3>Single Search</h3>
   <input id="consumer" type="text" placeholder="Enter Single Consumer Number">
   <div class="button-group">
@@ -47,19 +48,23 @@
     <button class="debug-btn" onclick="showSingleDebug()" id="singleDebugBtn" style="display:none;">Debug Fields</button>
   </div>
 
+  <!-- BULK SEARCH -->
   <h3>Bulk Search</h3>
   <textarea id="bulkConsumers" placeholder="Enter multiple Consumer Numbers (one per line)"></textarea>
   <div class="button-group">
     <button class="bulk-btn" onclick="startBulkProcessing()">Process Bulk Data</button>
     <button class="export-btn" onclick="exportBulkToExcel()" id="bulkExportBtn" style="display:none;">Export All to Excel</button>
     <button class="debug-btn" onclick="showBulkDebug()" id="bulkDebugBtn" style="display:none;">Show Field Map</button>
+    <button onclick="autoFillConsumers()">Autofill</button>
   </div>
 
+  <!-- PROGRESS & STATUS -->
   <div class="progress-container">
     <div class="progress-bar" id="progressBar"></div>
     <div class="status" id="progressStatus">Ready</div>
   </div>
 
+  <!-- RESULTS -->
   <div id="singleResult" class="result-box"></div>
   <div id="singleDebug" class="debug-box"></div>
   <div id="bulkResult" class="result-box"></div>
@@ -68,7 +73,7 @@
 </div>
 
 <script>
-// ========== LOGIN SYSTEM ============
+// ================= LOGIN SYSTEM =================
 const PASSWORD = "1234"; 
 if (localStorage.getItem("loggedIn") === "yes") {
   document.getElementById("loginBox").style.display = "none";
@@ -83,19 +88,20 @@ function doLogin() {
   } else { alert("Wrong Password!"); }
 }
 
-// ========== HELPER: GET FIRST NAME ==========
+// ================= HELPER FUNCTION =================
 function getFirstName(fullName) {
   if (!fullName) return "";
   return fullName.split(" ")[0];
 }
 
-// ======================= ORIGINAL SCRIPT (UNCHANGED) ============================
+// ================= GLOBAL VARIABLES =================
 let currentBillData = null;
 let bulkData = [];
 let processedCount = 0;
 let totalCount = 0;
 let fieldMap = {};
 
+// ================= SINGLE BILL FETCH =================
 function fetchSingleBill() {
   const consumer = document.getElementById("consumer").value.trim();
   const resultBox = document.getElementById("singleResult");
@@ -149,7 +155,7 @@ function showSingleDebug() {
   debugBox.style.display = "block";
 }
 
-// ======================= BULK PROCESS ============================
+// ================= BULK PROCESS =================
 function startBulkProcessing() {
   const text = document.getElementById("bulkConsumers").value.trim();
   const resultBox = document.getElementById("bulkResult");
@@ -183,7 +189,7 @@ function processNextConsumer(consumers, index) {
       if (processedCount === 1) autoDetectFields(details);
 
       let name = extractField(details, "name");
-      name = getFirstName(name); // first name only
+      name = getFirstName(name); 
       let mobile = extractField(details, "mobile");
       if(mobile === "Not Available" || mobile === "N/A") mobile = "";
 
@@ -260,26 +266,58 @@ function showBulkDebug() {
   debugBox.style.display = "block";
 }
 
-// ======================= EXPORT EXCEL (FIRST NAME ONLY) ============================
+// ================= EXPORT EXCEL ONLY VALID ROWS =================
 function exportBulkToExcel() {
   if (bulkData.length === 0) return alert("No data to export!");
-  const cleanData = bulkData.map(({ RawData, ...rest }) => {
-    const filtered = {};
-    for (let key in rest) {
-      let value = rest[key];
-      if(value && value !== "Not Available" && value !== "N/A"){
-        if(key === "Name") value = getFirstName(value); // first name only
-        filtered[key] = value;
-      }
-    }
-    return filtered;
-  });
 
-  const ws = XLSX.utils.json_to_sheet(cleanData);
+  // Sirf rows jisme valid Mobile Number ho
+  const finalData = bulkData
+    .filter(item => item["Mobile Number"] && item["Mobile Number"] !== "Not Available" && item["Mobile Number"] !== "N/A")
+    .map(item => ({
+      "Name": item["Name"] || "",
+      "Consumer No": item["Consumer No"] || "",
+      "Mobile Number": item["Mobile Number"] || ""
+    }));
+
+  if(finalData.length === 0) return alert("No valid rows with Mobile Number to export!");
+
+  const ws = XLSX.utils.json_to_sheet(finalData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Bulk Bill Data");
+
   XLSX.writeFile(wb, `Bulk_Bill_Data_${Date.now()}.xlsx`);
   alert("Excel Export Successful!");
+}
+
+// ================= AUTOFILL FUNCTION =================
+function autoFillConsumers() {
+  const textarea = document.getElementById("bulkConsumers");
+  let lines = textarea.value.trim().split("\n").map(x => x.trim()).filter(x => x);
+
+  if (lines.length === 0) {
+    alert("Please enter at least one consumer number first!");
+    return;
+  }
+
+  let lastNumber = lines[lines.length - 1];
+
+  if (!/^\d+$/.test(lastNumber)) {
+    alert("Last consumer number must be numeric!");
+    return;
+  }
+
+  let qty = prompt("Kitni quantity autofill karni hai?");
+  qty = parseInt(qty);
+
+  if (!qty || qty < 1) return alert("Invalid quantity!");
+
+  let base = parseInt(lastNumber);
+  let newList = [];
+  for (let i = 1; i <= qty; i++) {
+    newList.push(base + i);
+  }
+
+  textarea.value += "\n" + newList.join("\n");
 }
 </script>
 
