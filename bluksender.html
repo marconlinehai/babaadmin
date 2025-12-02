@@ -1,58 +1,95 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WhatsApp Link Generator XLSX</title>
-<style>
-  body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
-  h2 { text-align: center; }
-  input[type="file"] { margin-bottom: 20px; }
-  #list { max-height: 400px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
-  a { display: block; margin: 5px 0; color: #0066cc; text-decoration: none; }
+<!DOCTYPE html>  
+<html lang="en">  
+<head>  
+<meta charset="UTF-8">  
+<meta name="viewport" content="width=device-width, initial-scale=1.0">  
+<title>WhatsApp Link Generator XLSX</title>  
+<style>  
+  body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }  
+  h2 { text-align: center; }  
+  input[type="file"] { margin-bottom: 20px; }  
+  #list { 
+    max-height: 400px; 
+    overflow-y: auto; 
+    background: #fff; 
+    padding: 10px; 
+    border-radius: 8px; 
+    box-shadow: 0 0 5px rgba(0,0,0,0.1); 
+  }  
+
+  /* Default link color: GREEN */
+  a {
+    display: block;
+    margin: 5px 0;
+    color: green;
+    text-decoration: none;
+    font-weight: bold;
+  }
+
+  /* Clicked link color: RED */
+  a.clicked {
+    color: red !important;
+  }
+
   a:hover { text-decoration: underline; }
-</style>
-</head>
-<body>
+</style>  
+</head>  
+<body>  
+  
+<h2>WhatsApp Link Generator (XLSX)</h2>  
+<input type="file" id="fileInput" accept=".xlsx, .xls" />  
+<div id="list"></div>  
+  
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>  
+<script>  
+const fileInput = document.getElementById('fileInput');  
+const listDiv = document.getElementById('list');  
+  
+fileInput.addEventListener('change', (e) => {  
+  const file = e.target.files[0];  
+  if(!file) return;  
+  
+  const reader = new FileReader();  
+  reader.onload = (evt) => {  
+    const data = new Uint8Array(evt.target.result);  
+    const workbook = XLSX.read(data, {type:'array'});  
+    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];  
+    const jsonData = XLSX.utils.sheet_to_json(firstSheet);  
+  
+    listDiv.innerHTML = '';  
+    let serial = 1;  
 
-<h2>WhatsApp Link Generator (XLSX)</h2>
-<input type="file" id="fileInput" accept=".xlsx, .xls" />
-<div id="list"></div>
+    jsonData.forEach(row => {  
+      const name = row['Name'] || '';  
+      const consumer = row['Consumer No'] || '';  
+      const number = row['Mobile Number'] || '';  
+      
+      if(name && consumer && number){  
+        
+        const waLink =
+`https://wa.me/${number}?text=*Dear NPCL* ${name},%0A
+Your electricity bill for the previous month has not been updated. As per NPCL guidelines, your ${consumer} connection may be *disconnected today* by 10:30 PM.%0A
+Please contact the NPCL officer *immediately* and update your bill.%0A%0A
+NPCL Helpline: 9771204314%0A— NPCL Billing Department`;
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script>
-const fileInput = document.getElementById('fileInput');
-const listDiv = document.getElementById('list');
+        const a = document.createElement('a');  
+        a.href = waLink;  
+        a.target = "_blank";  
+        a.textContent = `${serial}. ${name} - ${consumer}`;  
 
-fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
+        // Click hone ke baad color RED ho jayega
+        a.addEventListener("click", () => {
+          a.classList.add("clicked");
+        });
 
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    const data = new Uint8Array(evt.target.result);
-    const workbook = XLSX.read(data, {type:'array'});
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-
-    listDiv.innerHTML = '';
-    jsonData.forEach(row => {
-      const name = row['Name'] || '';
-      const consumer = row['Consumer No'] || '';
-      const number = row['Mobile Number'] || '';
-      if(name && consumer && number){
-        const waLink = `https://wa.me/${number}?text=*Dear NPCL* ${name},%0AYour electricity bill for the previous month has not been updated. As per NPCL guidelines, your ${consumer} connection may be *disconnected today* by 10:30 PM.%0APlease contact the NPCL officer *immediately* and update your bill.%0A%0ANPCL Helpline: 9771204314%0A— NPCL Billing Department`;
-        const a = document.createElement('a');
-        a.href = waLink;
-        a.target = "_blank";
-        a.textContent = `${name} - ${consumer}`;
-        listDiv.appendChild(a);
-      }
-    });
-  };
-  reader.readAsArrayBuffer(file);
-});
-</script>
-
-</body>
+        listDiv.appendChild(a);  
+        serial++;  
+      }  
+    });  
+  };  
+  reader.readAsArrayBuffer(file);  
+});  
+</script>  
+  
+</body>  
 </html>
