@@ -7,7 +7,8 @@
 <style>
   body { font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4; }
   h2 { text-align: center; }
-  input, button { margin: 10px 0; padding: 8px; font-size: 16px; }
+  textarea, button { margin: 10px 0; padding: 8px; font-size: 16px; width: 100%; }
+  textarea { height: 150px; resize: vertical; }
   #list { 
     max-height: 400px; 
     overflow-y: auto; 
@@ -25,8 +26,8 @@
 
 <h2>WhatsApp Link Generator (Manual)</h2>
 
-<label>Enter Mobile Numbers (comma-separated, e.g. 919876543210,918765432109):</label><br>
-<input type="text" id="numbersInput" placeholder="Enter numbers here" size="50">
+<label>Paste Mobile Numbers (one per line or comma-separated):</label><br>
+<textarea id="numbersInput" placeholder="Enter numbers here"></textarea>
 <button id="generateBtn">Generate Links</button>
 
 <div id="list"></div>
@@ -37,7 +38,12 @@ const generateBtn = document.getElementById('generateBtn');
 const listDiv = document.getElementById('list');
 
 generateBtn.addEventListener('click', () => {
-  const numbers = numbersInput.value.split(',').map(n => n.trim()).filter(n => n);
+  // Split by comma or new line, remove empty strings and spaces
+  const numbers = numbersInput.value
+    .split(/[\n,]+/)
+    .map(n => n.trim())
+    .filter(n => n);
+  
   listDiv.innerHTML = '';
   let serial = 1;
 
