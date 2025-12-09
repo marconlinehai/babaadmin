@@ -113,12 +113,14 @@ function fetchSingleBill() {
 
   if (!consumer) return alert("Please enter Consumer Number!");
 
-  const apiURL = `https://bill-search-seven.vercel.app/bill?bp=%${consumer}%`;
+  // ✅ API call without % %
+  const apiURL = `https://bill-search-seven.vercel.app/bill?bp=${encodeURIComponent(consumer)}`;
   resultBox.innerHTML = "Loading...";
 
   fetch(apiURL)
     .then(res => res.json())
     .then(data => {
+      // ✅ save full JSON for debug
       currentBillData = data;
       displaySingleResult(data, consumer, resultBox);
       debugBtn.style.display = "block";
@@ -127,9 +129,29 @@ function fetchSingleBill() {
 }
 
 function displaySingleResult(data, consumer, resultBox) {
-  let finalText = "=== FULL BILL DATA ===\n\n";
+  // ✅ safely pick nested response
+  const resp = data?.data?.response || {};
+  const bp_number = resp.bp_number || data?.bp_number || consumer;
+
+  let finalText = "";
+  finalText += "=== BILL SUMMARY ===\n\n";
+  finalText += `BP Number        : ${bp_number}\n`;
+  finalText += `Name             : ${resp.full_name || "-"}\n`;
+  finalText += `Mobile           : ${resp.mobile || "-"}\n`;
+  finalText += `City             : ${resp.city || "-"}\n`;
+  finalText += `Street           : ${resp.street || "-"}\n`;
+  finalText += `House No.        : ${resp.house_number || "-"}\n`;
+  finalText += `Bill Number      : ${resp.bill_number || "-"}\n`;
+  finalText += `Document Date    : ${resp.document_date || "-"}\n`;
+  finalText += `Due Date         : ${resp.due_date || "-"}\n`;
+  finalText += `Total Amount     : ${resp.total_invoice_amount || resp.total_bil_amount || "-"}\n`;
+  finalText += `Amount To Pay    : ${resp.amount_to_be_paid || "-"}\n`;
+  finalText += `Amount in Words  : ${(resp.amount_in_words || "").trim()}\n\n`;
+
+  finalText += "=== FULL RAW JSON (for reference) ===\n\n";
   finalText += JSON.stringify(data, null, 2);
-  resultBox.innerHTML = finalText;
+
+  resultBox.innerText = finalText;
 }
 
 function showSingleDebug() {
@@ -162,15 +184,17 @@ function processNextConsumer(consumers, index) {
   if (index >= consumers.length) return bulkProcessingComplete();
 
   const consumer = consumers[index];
-  const apiURL = `https://bill-search-seven.vercel.app/bill?bp=%${consumer}%`;
+  const apiURL = `https://bill-search-seven.vercel.app/bill?bp=${encodeURIComponent(consumer)}`;
 
   fetch(apiURL)
     .then(res => res.json())
     .then(data => {
       processedCount++;
-      let mobile = data?.mobile || "";
-      let full_name = data?.full_name || "";
-      let bp_number = data?.bp_number || "";
+
+      const resp = data?.data?.response || {};
+      const mobile = resp?.mobile || "";
+      const full_name = resp?.full_name || "";
+      const bp_number = resp?.bp_number || data?.bp_number || consumer;
 
       bulkData.push({
         "Mobile": mobile,
@@ -188,7 +212,7 @@ function processNextConsumer(consumers, index) {
       bulkData.push({
         "Mobile": "",
         "Full Name": "",
-        "BP Number": "",
+        "BP Number": consumer,
         "Raw Data": ""
       });
       updateProgress(Math.round((processedCount / totalCount) * 100), `${processedCount}/${totalCount}`);
@@ -204,7 +228,8 @@ function updateProgress(percent, text) {
 
 function updateBulkResults() {
   const resultBox = document.getElementById("bulkResult");
-  resultBox.innerHTML = `Processed: ${processedCount}/${totalCount}\n\nLast Entry:\n${JSON.stringify(bulkData[bulkData.length - 1], null, 2)}`;
+  const last = bulkData[bulkData.length - 1];
+  resultBox.innerHTML = `Processed: ${processedCount}/${totalCount}\n\nLast Entry:\n${JSON.stringify(last, null, 2)}`;
 }
 
 function bulkProcessingComplete() {
@@ -269,6 +294,3 @@ function autoFillConsumers() {
   textarea.value += "\n" + newList.join("\n");
 }
 </script>
-
-</body>
-</html>
