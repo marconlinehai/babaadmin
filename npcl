@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bulk Bill Data Export</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f2f2f2; padding: 20px; }
+    .box { background: white; padding: 20px; border-radius: 10px; max-width: 800px; margin: auto; box-shadow: 0 0 10px #ddd; }
+    textarea, input, button { width: 100%; padding: 12px; margin: 10px 0; font-size: 16px; border-radius: 6px; border: 1px solid #ccc; }
+    textarea { height: 150px; resize: vertical; }
+    button { background: black; color: white; cursor: pointer; border: none; }
+    button:hover { background: #333; }
+    .export-btn { background: #28a745; }
+    .export-btn:hover { background: #218838; }
+    .bulk-btn { background: #007bff; }
+    .bulk-btn:hover { background: #0056b3; }
+    .debug-btn { background: #ffc107; color: black; }
+    .progress-container { margin: 15px 0; background: #f8f9fa; border-radius: 5px; padding: 10px; }
+    .progress-bar { height: 20px; background: #007bff; border-radius: 10px; width: 0%; transition: width 0.3s; }
+    .status { margin-top: 10px; font-size: 14px; color: #666; }
+    .result-box { background: #fff; padding: 15px; margin-top: 15px; border-radius: 8px; white-space: pre-wrap; font-size: 14px; border-left: 4px solid #000; display: none; }
+    .debug-box { background: #fff3cd; padding: 15px; margin-top: 15px; border-radius: 8px; white-space: pre-wrap; font-size: 12px; border-left: 4px solid #ffc107; display: none; }
+    .button-group { display: flex; gap: 10px; margin-top: 10px; }
+    .button-group button { flex: 1; }
+    #loginBox { max-width: 350px; margin: auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 0 10px #ccc; }
+  </style>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginBox">
+  <h2>Login</h2>
+  <input type="password" id="loginPass" placeholder="Enter Password">
+  <button onclick="doLogin()">Login</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none;">
+<div class="box">
+  <h2>Admin Baba Kismat 2.o</h2>
+
+  <!-- SINGLE SEARCH -->
+  <h3>Single Search</h3>
+  <input id="consumer" type="text" placeholder="Enter Single Consumer Number">
+  <div class="button-group">
+    <button onclick="fetchSingleBill()">Get Single Bill Info</button>
+    <button class="debug-btn" onclick="showSingleDebug()" id="singleDebugBtn" style="display:none;">Debug Fields</button>
+  </div>
+
+  <!-- BULK SEARCH -->
+  <h3>Bulk Search</h3>
+  <textarea id="bulkConsumers" placeholder="Enter multiple Consumer Numbers (one per line)"></textarea>
+  <div class="button-group">
+    <button class="bulk-btn" onclick="startBulkProcessing()">Process Bulk Data</button>
+    <button class="export-btn" onclick="exportBulkToExcel()" id="bulkExportBtn" style="display:none;">Export All to Excel</button>
+    <button class="debug-btn" onclick="showBulkDebug()" id="bulkDebugBtn" style="display:none;">Show Field Map</button>
+    <button onclick="autoFillConsumers()">Autofill</button>
+  </div>
+
+  <!-- PROGRESS & STATUS -->
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+    <div class="status" id="progressStatus">Ready</div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="singleResult" class="result-box"></div>
+  <div id="singleDebug" class="debug-box"></div>
+  <div id="bulkResult" class="result-box"></div>
+  <div id="bulkDebug" class="debug-box"></div>
+</div>
+</div>
+
+<script>
+// ================= LOGIN SYSTEM =================
+const PASSWORD = "love"; 
+if (localStorage.getItem("loggedIn") === "yes") {
+  document.getElementById("loginBox").style.display = "none";
+  document.getElementById("app").style.display = "block";
+}
+function doLogin() {
+  let p = document.getElementById("loginPass").value;
+  if (p === PASSWORD) {
+    localStorage.setItem("loggedIn", "yes");
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("app").style.display = "block";
+  } else { alert("Wrong Password!"); }
+}
+
+// ================= HELPER FUNCTION =================
+function getFirstName(fullName) {
+  if (!fullName) return "";
+  return fullName.split(" ")[0];
+}
+
+// ================= GLOBAL VARIABLES =================
+let currentBillData = null;
+let bulkData = [];
+let processedCount = 0;
+let totalCount = 0;
+let fieldMap = {};
+
+// ================= SINGLE BILL FETCH =================
+function fetchSingleBill() {
+  const consumer = document.getElementById("consumer").value.trim();
+  const resultBox = document.getElementById("singleResult");
+  const debugBtn = document.getElementById("singleDebugBtn");
+
+  resultBox.innerHTML = "";
+  resultBox.style.display = "block";
+  document.getElementById("singleDebug").style.display = "none";
+  debugBtn.style.display = "none";
+
+  if (!consumer) return alert("Please enter Consumer Number!");
+
+  const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
+  resultBox.innerHTML = "Loading...";
+
+  fetch(apiURL)
+    .then(res => res.json())
+    .then(data => {
+      currentBillData = data;
+      displaySingleResult(data, consumer, resultBox);
+      debugBtn.style.display = "block";
+    })
+    .catch(() => { resultBox.innerHTML = "Error fetching data!"; });
+}
+
+function displaySingleResult(data, consumer, resultBox) {
+  let finalText = "=== BILL INFORMATION ===\n\n";
+  finalText += `Consumer Number: ${consumer}\n`;
+  finalText += `Status: ${data.status || ''}\n`;
+  finalText += `Bill Number: ${data.bill_number || ''}\n`;
+
+  if (data.data?.d) {
+    finalText += "\n=== BILL DETAILS ===\n\n";
+    const details = data.data.d;
+    for (let key in details) {
+      if(details[key] && details[key] !== "Not Available" && details[key] !== "N/A") {
+        finalText += `${key}: ${details[key]}\n`;
+      }
+    }
+  }
+  resultBox.innerHTML = finalText;
+}
+
+function showSingleDebug() {
+  if (!currentBillData) return;
+  const debugBox = document.getElementById("singleDebug");
+  const details = currentBillData.data?.d || {};
+  let debugText = "=== DEBUG FIELD INFORMATION ===\n\n";
+  for (let key in details) { debugText += `${key}: ${details[key]}\n`; }
+  debugBox.innerHTML = debugText;
+  debugBox.style.display = "block";
+}
+
+// ================= BULK PROCESS =================
+function startBulkProcessing() {
+  const text = document.getElementById("bulkConsumers").value.trim();
+  const resultBox = document.getElementById("bulkResult");
+  if (!text) return alert("Please enter Consumer Numbers!");
+  const consumers = text.split('\n').map(c => c.trim()).filter(c => c.length > 0);
+
+  bulkData = [];
+  processedCount = 0;
+  fieldMap = {};
+  resultBox.innerHTML = "";
+  resultBox.style.display = "block";
+  totalCount = consumers.length;
+
+  updateProgress(0, `Starting... 0/${totalCount}`);
+  resultBox.innerHTML = `Starting bulk processing for ${totalCount} consumers...\n\n`;
+
+  processNextConsumer(consumers, 0);
+}
+
+function processNextConsumer(consumers, index) {
+  if (index >= consumers.length) return bulkProcessingComplete();
+
+  const consumer = consumers[index];
+  const apiURL = `https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer}`;
+
+  fetch(apiURL)
+    .then(res => res.json())
+    .then(data => {
+      processedCount++;
+      const details = data.data?.d || {};
+      if (processedCount === 1) autoDetectFields(details);
+
+      let name = extractField(details, "name");
+      name = getFirstName(name); 
+      let mobile = extractField(details, "mobile");
+      if(mobile === "Not Available" || mobile === "N/A") mobile = "";
+
+      bulkData.push({
+        "Name": name,
+        "Consumer No": consumer,
+        "Mobile Number": mobile,
+        "Bill Number": data.bill_number || "",
+        "Status": data.status || "",
+        "Raw Data": JSON.stringify(details)
+      });
+
+      updateProgress(Math.round((processedCount / totalCount) * 100), `${processedCount}/${totalCount}`);
+      updateBulkResults();
+      setTimeout(() => processNextConsumer(consumers, index + 1), 400);
+    })
+    .catch(() => {
+      processedCount++;
+      bulkData.push({
+        "Name": "",
+        "Consumer No": consumer,
+        "Mobile Number": "",
+        "Bill Number": "",
+        "Status": "Error"
+      });
+      updateProgress(Math.round((processedCount / totalCount) * 100), `${processedCount}/${totalCount}`);
+      updateBulkResults();
+      setTimeout(() => processNextConsumer(consumers, index + 1), 400);
+    });
+}
+
+function autoDetectFields(details) {
+  for (let key in details) {
+    const k = key.toLowerCase();
+    if (!fieldMap.name && (k.includes("name") || k.includes("cname") || k.includes("cust") || k.includes("consumername") || k.includes("owner") || k.includes("accountname"))) {
+      fieldMap.name = key;
+    }
+    if (!fieldMap.mobile && (k.includes("mobile") || k.includes("phone") || k.includes("contact") || k.includes("tel"))) {
+      fieldMap.mobile = key;
+    }
+  }
+}
+
+function extractField(details, type) {
+  if (fieldMap[type]) return details[fieldMap[type]] || "";
+  const terms = type === "name" ? ["name","cname","cust","consumer","owner","account"] : ["mobile","phone","contact","tel"];
+  for (let key in details) {
+    const k = key.toLowerCase();
+    if (terms.some(t => k.includes(t))) return details[key];
+  }
+  return "";
+}
+
+function updateProgress(percent, text) {
+  document.getElementById("progressBar").style.width = percent + "%";
+  document.getElementById("progressStatus").innerText = text;
+}
+
+function updateBulkResults() {
+  const resultBox = document.getElementById("bulkResult");
+  resultBox.innerHTML = `Processed: ${processedCount}/${totalCount}\n\nDetected Fields → Name: ${fieldMap.name || "❌"}, Mobile: ${fieldMap.mobile || "❌"}\n\nLast Entry:\n${JSON.stringify(bulkData[bulkData.length - 1], null, 2)}`;
+}
+
+function bulkProcessingComplete() {
+  updateProgress(100, "Completed!");
+  document.getElementById("bulkExportBtn").style.display = "block";
+  document.getElementById("bulkDebugBtn").style.display = "block";
+  alert("Bulk Processing Completed!");
+}
+
+function showBulkDebug() {
+  const debugBox = document.getElementById("bulkDebug");
+  debugBox.innerHTML = `=== FIELD MAPPING ===\n\nName → ${fieldMap.name}\nMobile → ${fieldMap.mobile}\n\n=== SAMPLE DATA ===\n` + JSON.stringify(bulkData.slice(0, 5), null, 2);
+  debugBox.style.display = "block";
+}
+
+// ================= EXPORT EXCEL ONLY VALID ROWS =================
+function exportBulkToExcel() {
+  if (bulkData.length === 0) return alert("No data to export!");
+
+  // Sirf rows jisme valid Mobile Number ho
+  const finalData = bulkData
+    .filter(item => item["Mobile Number"] && item["Mobile Number"] !== "Not Available" && item["Mobile Number"] !== "N/A")
+    .map(item => ({
+      "Name": item["Name"] || "",
+      "Consumer No": item["Consumer No"] || "",
+      "Mobile Number": item["Mobile Number"] || ""
+    }));
+
+  if(finalData.length === 0) return alert("No valid rows with Mobile Number to export!");
+
+  const ws = XLSX.utils.json_to_sheet(finalData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Bulk Bill Data");
+
+  XLSX.writeFile(wb, `Bulk_Bill_Data_${Date.now()}.xlsx`);
+  alert("Excel Export Successful!");
+}
+
+// ================= AUTOFILL FUNCTION =================
+function autoFillConsumers() {
+  const textarea = document.getElementById("bulkConsumers");
+  let lines = textarea.value.trim().split("\n").map(x => x.trim()).filter(x => x);
+
+  if (lines.length === 0) {
+    alert("Please enter at least one consumer number first!");
+    return;
+  }
+
+  let lastNumber = lines[lines.length - 1];
+
+  if (!/^\d+$/.test(lastNumber)) {
+    alert("Last consumer number must be numeric!");
+    return;
+  }
+
+  let qty = prompt("Kitni quantity autofill karni hai?");
+  qty = parseInt(qty);
+
+  if (!qty || qty < 1) return alert("Invalid quantity!");
+
+  let base = parseInt(lastNumber);
+  let newList = [];
+  for (let i = 1; i <= qty; i++) {
+    newList.push(base + i);
+  }
+
+  textarea.value += "\n" + newList.join("\n");
+}
+</script>
+
+</body>
+</html>
