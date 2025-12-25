@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Wallet Control Panel</title>
+<style>
+body{font-family:Arial;background:#f2f2f2;padding:20px}
+.box{background:#fff;padding:20px;border-radius:10px;max-width:700px;margin:auto;box-shadow:0 0 10px #ccc}
+input,button,select{width:100%;padding:12px;margin:8px 0;font-size:15px;border-radius:6px;border:1px solid #ccc}
+button{background:#000;color:#fff;cursor:pointer}
+button:hover{background:#333}
+.history{font-size:12px;background:#111;color:#0f0;padding:10px;border-radius:5px;max-height:200px;overflow:auto}
+.userRow{border-bottom:1px solid #ccc;padding:8px 0}
+.bad{color:red;font-weight:bold}
+.good{color:green;font-weight:bold}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- ADMIN LOGIN -->
+<div id="loginBox" class="box">
+<h2>Admin Login</h2>
+<input type="password" id="loginPass" placeholder="Admin Password">
+<button onclick="doLogin()">Login</button>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="app" class="box" style="display:none">
+<h2>Admin Wallet Control Panel</h2>
+
+<h3>🔐 User Login Password</h3>
+<input type="text" id="currentUserPass" readonly style="background:#eee;">
+
+<hr>
+
+<h3>💰 Recharge / Deduct Wallet</h3>
+<input type="text" id="userIdInput" placeholder="User ID (walletmngl01)">
+<input type="number" id="amountInput" placeholder="Amount ₹">
+<input type="text" id="reasonInput" placeholder="Reason">
+
+<button onclick="rechargeUser()">➕ Recharge</button>
+<button onclick="deductUser()" style="background:#b30000">➖ Deduct</button>
+
+<hr>
+
+<h3>👥 All Users & Balances</h3>
+<div id="usersList">Loading...</div>
+
+<hr>
+
+<h3>📜 Wallet History (Last 20)</h3>
+<div class="history" id="walletHistory">Loading...</div>
+
+</div>
+
+<script>
+// ================= FIREBASE =================
+firebase.initializeApp({
+ apiKey:"AIzaSyD7kr-x5CJLdWGoj6r_MAPmhnJWe8Jc3oI",
+ authDomain:"ss22-a96d3.firebaseapp.com",
+ projectId:"ss22-a96d3"
+});
+const db=firebase.firestore();
+
+// ================= LOGIN =================
+const ADMIN_PASSWORD="admin123";
+const loginId="login-passwordmngl";
+
+function doLogin(){
+ if(loginPass.value!==ADMIN_PASSWORD) return alert("Wrong password");
+ loginBox.style.display="none";
+ app.style.display="block";
+ loadUserPassword();
+ loadUsers();
+ loadHistory();
+}
+
+// ================= USER PASSWORD =================
+function loadUserPassword(){
+ db.collection("logins").doc(loginId).onSnapshot(d=>{
+   currentUserPass.value=d.exists?d.data().password:"1234";
+ });
+}
+
+// ================= RECHARGE =================
+async function rechargeUser(){
+ walletUpdate("credit");
+}
+
+// ================= DEDUCT =================
+async function deductUser(){
+ walletUpdate("debit");
+}
+
+async function walletUpdate(type){
+ const userId=userIdInput.value.trim();
+ const amt=parseInt(amountInput.value);
+ if(!userId||!amt||amt<=0) return alert("Invalid input");
+
+ const ref=db.collection("wallets").doc(userId);
+
+ await db.runTransaction(async t=>{
+  const d=await t.get(ref);
+  let bal=d.exists?d.data().balance||0:0;
+  const active=d.exists?d.data().active!==false:true;
+  
+  if(!active) throw "User OFF. Operation blocked.";
+
+  if(type==="debit" && bal<amt) throw "Low balance";
+
+  bal = type==="credit" ? bal+amt : bal-amt;
+
+  t.set(ref,{balance:bal},{merge:true});
+  t.set(ref.collection("history").doc(),{
+   type:type,
+   amount:amt,
+   reason:reasonInput.value||type,
+   time:firebase.firestore.FieldValue.serverTimestamp()
+  });
+ });
+
+ alert(type==="credit"?"Recharge done":"Deducted");
+ userIdInput.value="";amountInput.value="";reasonInput.value="";
+}
+
+// ================= ALL USERS LIST =================
+function loadUsers(){
+ db.collection("wallets").onSnapshot(s=>{
+  let out="";
+  s.forEach(d=>{
+   const x=d.data();
+   const displayBalance = x.active===false?0:(x.balance||0);
+   out+=`
+    <div class="userRow">
+     <b>${d.id}</b><br>
+     Balance: ₹${displayBalance} <br>
+     Status: <span class="${x.active===false?'bad':'good'}">
+       ${x.active===false?'OFF':'ON'}
+     </span>
+     <button onclick="toggleUser('${d.id}',${x.active===false})">
+      ${x.active===false?'Enable':'Disable'}
+     </button>
+    </div>`;
+  });
+  usersList.innerHTML=out||"No users";
+ });
+}
+
+// ================= ENABLE / DISABLE =================
+function toggleUser(uid,state){
+ // state = true means currently OFF, we want to turn ON
+ db.collection("wallets").doc(uid).set({active:state},{merge:true});
+}
+
+// ================= HISTORY =================
+function loadHistory(){
+ db.collectionGroup("history")
+ .orderBy("time","desc").limit(20)
+ .onSnapshot(s=>{
+  let out="";
+  s.forEach(d=>{
+   const x=d.data();
+   out+=`${d.ref.parent.parent.id} | ${x.type.toUpperCase()} ₹${x.amount} | ${x.reason}\n`;
+  });
+  walletHistory.innerText=out||"No history";
+ });
+}
+</script>
+</body>
+</html>
