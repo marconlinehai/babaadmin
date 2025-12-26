@@ -1,65 +1,260 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Developer Support</title>
-  <style>
-    body {
-      font-family: "Courier New", monospace;
-      background: radial-gradient(circle at top, #0f3d0f, #000000);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      color: #00ff66;
-    }
-    .container {
-      text-align: center;
-      background: rgba(0, 0, 0, 0.85);
-      padding: 40px;
-      border-radius: 12px;
-      box-shadow: 0 0 25px #00ff66;
-      border: 1px solid #00ff66;
-    }
-    h1 {
-      margin-bottom: 20px;
-      color: #00ff66;
-      text-shadow: 0 0 10px #00ff66;
-    }
-    p {
-      margin-bottom: 30px;
-      color: #9dffb3;
-      font-size: 16px;
-    }
-    .btn {
-      display: inline-block;
-      padding: 12px 26px;
-      background: transparent;
-      color: #00ff66;
-      font-size: 16px;
-      border: 2px solid #00ff66;
-      border-radius: 8px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 10px #00ff66 inset;
-    }
-    .btn:hover {
-      background: #00ff66;
-      color: #000;
-      box-shadow: 0 0 20px #00ff66;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Multi User Wallet – Bulk Bill System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{font-family:Arial;background:#f2f2f2;margin:0}
+
+/* BOX */
+.box{background:#fff;padding:15px;border-radius:8px;max-width:900px;margin:20px auto;box-shadow:0 0 8px #ccc}
+input,textarea,button{width:100%;padding:10px;margin:6px 0;font-size:14px;border-radius:5px;border:1px solid #ccc}
+button{background:#000;color:#fff;cursor:pointer}
+button:hover{background:#333}
+
+/* TOP BAR */
+#topBar{
+ position:fixed;top:0;left:0;right:0;
+ background:#000;color:#0f0;
+ padding:6px 10px;
+ font-size:13px;
+ text-align:right;
+ z-index:99
+}
+
+/* MENU BUTTON */
+#menuBtn{
+ position:fixed;top:6px;left:6px;
+ z-index:100;
+ background:#000;color:#0f0;
+ border:none;padding:4px 6px;
+ font-size:13px;width:auto
+}
+
+.content{padding-top:45px}
+
+/* SIDE MENU */
+#sideMenu{
+ position:fixed;left:-220px;top:0;
+ width:200px;height:100%;
+ background:#111;color:#0f0;
+ padding:8px;
+ transition:.3s;z-index:101
+}
+#sideMenu button{margin:5px 0;font-size:13px;padding:8px}
+
+/* HISTORY */
+.history,#liveBulk{
+ background:#111;color:#0f0;
+ padding:8px;border-radius:5px;
+ max-height:180px;overflow:auto;
+ font-size:12px
+}
+
+/* PROGRESS */
+.progress{background:#ddd;border-radius:10px;overflow:hidden}
+.progress div{height:20px;background:#007bff;width:0%;color:#fff;text-align:center;font-size:12px}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 </head>
+
 <body>
-  <div class="container">
-    <h1>Payment Expired / Due</h1>
-    <p>Please contact developer support for assistance.</p>
-    <a class="btn" href="https://t.me/babajisupport" target="_blank">
-      Contact Developer Support
-    </a>
-  </div>
+
+<button id="menuBtn" onclick="toggleMenu()">☰</button>
+
+<div id="topBar">
+ 💰 Wallet ₹ <span id="walletAmount">0</span> |
+ <span id="userName">Guest</span>
+</div>
+
+<div id="sideMenu">
+<div style="font-size:12px;margin-bottom:8px">
+ Wallet ID:<br>
+ <b id="walletIdLabel">-</b>
+</div>
+<button onclick="logout()">Logout</button>
+<a href="https://t.me/babajisupport" target="_blank"><button>Contact</button></a>
+<button onclick="toggleMenu()" style="color:red">Close</button>
+</div>
+
+<div class="content">
+
+<!-- LOGIN -->
+<div id="loginBox" class="box">
+<h3>Login</h3>
+<input id="l_userid" placeholder="User ID">
+<input id="l_pass" type="password" placeholder="Password">
+<button onclick="login()">Login</button>
+<button onclick="showRegister()" style="background:#555">Register</button>
+</div>
+
+<!-- REGISTER -->
+<div id="registerBox" class="box" style="display:none">
+<h3>Register</h3>
+<input id="r_name" placeholder="Name">
+<input id="r_userid" placeholder="User ID">
+<input id="r_pass" type="password" placeholder="Password">
+<button onclick="register()">Create Account</button>
+<button onclick="showLogin()" style="background:#555">Back to Login</button>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+<div class="box">
+
+<h3>Single Search</h3>
+<input id="consumer" placeholder="Consumer Number">
+<button onclick="singleSearch()">Search (₹1)</button>
+<pre id="result"></pre>
+
+<h3>Bulk Search</h3>
+<textarea id="bulkConsumers" placeholder="One consumer per line"></textarea>
+<button onclick="startBulk()">Start Bulk</button>
+<button onclick="exportExcel()" id="exportBtn" style="display:none">Export Excel</button>
+
+<div class="progress"><div id="progressBar">0%</div></div>
+
+<h4>📥 Live Bulk</h4>
+<div id="liveBulk"></div>
+
+<h4>📜 Wallet History</h4>
+<div class="history" id="walletHistory"></div>
+
+</div>
+</div>
+</div>
+
+<script>
+// FIREBASE
+firebase.initializeApp({
+ apiKey:"AIzaSyD7kr-x5CJLdWGoj6r_MAPmhnJWe8Jc3oI",
+ authDomain:"ss22-a96d3.firebaseapp.com",
+ projectId:"ss22-a96d3"
+});
+const db=firebase.firestore();
+
+let walletId=null;
+let currentUserName="";
+let bulkData=[];
+
+// UI TOGGLE
+function showRegister(){loginBox.style.display="none";registerBox.style.display="block";}
+function showLogin(){registerBox.style.display="none";loginBox.style.display="block";}
+
+// REGISTER
+function register(){
+ let name=r_name.value.trim();
+ let uid=r_userid.value.trim();
+ let pass=r_pass.value.trim();
+ if(!name||!uid||!pass) return alert("Fill all");
+
+ db.collection("users").doc(uid).get().then(d=>{
+  if(d.exists) return alert("UserID exists");
+  walletId="wallet_"+uid;
+  db.collection("users").doc(uid).set({name,userid:uid,password:pass,walletId});
+  db.collection("wallets").doc(walletId).set({balance:0});
+  alert("Account created");
+  showLogin();
+ });
+}
+
+// LOGIN
+function login(){
+ let uid=l_userid.value.trim();
+ let pass=l_pass.value.trim();
+
+ db.collection("users").doc(uid).get().then(d=>{
+  if(!d.exists||d.data().password!==pass) return alert("Wrong login");
+
+  walletId=d.data().walletId;
+  currentUserName=d.data().name;
+
+  userName.innerText=currentUserName;
+  walletIdLabel.innerText=walletId;
+
+  loginBox.style.display="none";
+  registerBox.style.display="none";
+  app.style.display="block";
+
+  listenWallet();
+  loadHistory();
+ });
+}
+
+// WALLET
+function listenWallet(){
+ db.collection("wallets").doc(walletId)
+ .onSnapshot(d=>walletAmount.innerText=d.data()?.balance||0);
+}
+function deduct(a,r,c){
+ const ref=db.collection("wallets").doc(walletId);
+ ref.get().then(d=>{
+  let bal=d.data().balance;
+  if(bal<a) return;
+  ref.update({balance:bal-a});
+  ref.collection("history").add({amount:a,reason:r,consumer:c,time:Date.now()});
+ });
+}
+
+// SINGLE
+function singleSearch(){
+ if(walletAmount.innerText<1) return alert("Low balance");
+ deduct(1,"Single",consumer.value);
+ fetch(`https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${consumer.value}`)
+ .then(r=>r.json()).then(d=>result.innerText=JSON.stringify(d,null,2));
+}
+
+// BULK
+function startBulk(){
+ let list=bulkConsumers.value.split("\n").map(x=>x.trim()).filter(x=>x);
+ bulkData=[];liveBulk.innerText="";exportBtn.style.display="none";
+ processBulk(list,0);
+}
+function processBulk(list,i){
+ if(i>=list.length){exportBtn.style.display="block";return;}
+ if(walletAmount.innerText<1){processBulk(list,i+1);return;}
+ deduct(1,"Bulk",list[i]);
+ fetch(`https://heybrox7562.anayomuswork.workers.dev/api/search-bill/${list[i]}`)
+ .then(()=>{
+  bulkData.push({Consumer:list[i]});
+  liveBulk.innerText+=list[i]+"\n";
+  let p=Math.round((i+1)/list.length*100);
+  progressBar.style.width=p+"%";progressBar.innerText=p+"%";
+  processBulk(list,i+1);
+ });
+}
+
+// EXCEL
+function exportExcel(){
+ const ws=XLSX.utils.json_to_sheet(bulkData);
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,ws,"Bills");
+ XLSX.writeFile(wb,"Bulk.xlsx");
+}
+
+// HISTORY
+function loadHistory(){
+ db.collection("wallets").doc(walletId).collection("history")
+ .orderBy("time","desc").onSnapshot(s=>{
+  walletHistory.innerText="";
+  s.forEach(d=>{
+   let x=d.data();
+   walletHistory.innerText+=`₹${x.amount} ${x.reason} ${x.consumer||""}\n`;
+  });
+ });
+}
+
+// MENU
+function toggleMenu(){
+ sideMenu.style.left=sideMenu.style.left==="0px"?"-220px":"0px";
+}
+function logout(){location.reload();}
+</script>
+
 </body>
 </html>
