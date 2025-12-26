@@ -5,14 +5,16 @@
 <title>Admin Wallet Control Panel</title>
 <style>
 body{font-family:Arial;background:#f2f2f2;padding:20px}
-.box{background:#fff;padding:20px;border-radius:10px;max-width:700px;margin:auto;box-shadow:0 0 10px #ccc}
-input,button,select{width:100%;padding:12px;margin:8px 0;font-size:15px;border-radius:6px;border:1px solid #ccc}
+.box{background:#fff;padding:20px;border-radius:10px;max-width:900px;margin:auto;box-shadow:0 0 10px #ccc}
+input,button{width:100%;padding:12px;margin:6px 0;font-size:14px;border-radius:6px;border:1px solid #ccc}
 button{background:#000;color:#fff;cursor:pointer}
 button:hover{background:#333}
 .history{font-size:12px;background:#111;color:#0f0;padding:10px;border-radius:5px;max-height:200px;overflow:auto}
-.userRow{border-bottom:1px solid #ccc;padding:8px 0}
+.userRow{border-bottom:1px solid #ccc;padding:12px 0}
 .bad{color:red;font-weight:bold}
 .good{color:green;font-weight:bold}
+.small{font-size:12px;color:#555}
+.danger{background:#b30000;margin-top:6px}
 </style>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -20,40 +22,38 @@ button:hover{background:#333}
 </head>
 <body>
 
-<!-- ADMIN LOGIN -->
+<!-- LOGIN -->
 <div id="loginBox" class="box">
 <h2>Admin Login</h2>
 <input type="password" id="loginPass" placeholder="Admin Password">
 <button onclick="doLogin()">Login</button>
 </div>
 
-<!-- ADMIN PANEL -->
+<!-- PANEL -->
 <div id="app" class="box" style="display:none">
 <h2>Admin Wallet Control Panel</h2>
 
 <h3>🔐 User Login Password</h3>
-<input type="text" id="currentUserPass" readonly style="background:#eee;">
+<input id="currentUserPass" readonly style="background:#eee">
 
 <hr>
 
-<h3>💰 Recharge / Deduct Wallet</h3>
-<input type="text" id="userIdInput" placeholder="User ID (walletmngl01)">
-<input type="number" id="amountInput" placeholder="Amount ₹">
-<input type="text" id="reasonInput" placeholder="Reason">
-
+<h3>💰 Recharge / Deduct</h3>
+<input id="userIdInput" placeholder="Wallet ID">
+<input id="amountInput" type="number" placeholder="Amount ₹">
+<input id="reasonInput" placeholder="Reason">
 <button onclick="rechargeUser()">➕ Recharge</button>
 <button onclick="deductUser()" style="background:#b30000">➖ Deduct</button>
 
 <hr>
 
-<h3>👥 All Users & Balances</h3>
+<h3>👥 Users</h3>
 <div id="usersList">Loading...</div>
 
 <hr>
 
-<h3>📜 Wallet History (Last 20)</h3>
+<h3>📜 Wallet History</h3>
 <div class="history" id="walletHistory">Loading...</div>
-
 </div>
 
 <script>
@@ -67,6 +67,7 @@ const db=firebase.firestore();
 
 // ================= LOGIN =================
 const ADMIN_PASSWORD="admin123";
+const DELETE_PASSWORD="4542";
 const loginId="login-passwordmngl";
 
 function doLogin(){
@@ -81,78 +82,105 @@ function doLogin(){
 // ================= USER PASSWORD =================
 function loadUserPassword(){
  db.collection("logins").doc(loginId).onSnapshot(d=>{
-   currentUserPass.value=d.exists?d.data().password:"1234";
+  currentUserPass.value=d.exists?d.data().password:"1234";
  });
 }
 
-// ================= RECHARGE =================
-async function rechargeUser(){
- walletUpdate("credit");
-}
-
-// ================= DEDUCT =================
-async function deductUser(){
- walletUpdate("debit");
-}
+// ================= WALLET UPDATE =================
+function rechargeUser(){ walletUpdate("credit"); }
+function deductUser(){ walletUpdate("debit"); }
 
 async function walletUpdate(type){
- const userId=userIdInput.value.trim();
+ const wid=userIdInput.value.trim();
  const amt=parseInt(amountInput.value);
- if(!userId||!amt||amt<=0) return alert("Invalid input");
+ if(!wid||!amt||amt<=0) return alert("Invalid input");
 
- const ref=db.collection("wallets").doc(userId);
+ const ref=db.collection("wallets").doc(wid);
 
  await db.runTransaction(async t=>{
   const d=await t.get(ref);
   let bal=d.exists?d.data().balance||0:0;
   const active=d.exists?d.data().active!==false:true;
-  
-  if(!active) throw "User OFF. Operation blocked.";
-
+  if(!active) throw "User OFF";
   if(type==="debit" && bal<amt) throw "Low balance";
-
-  bal = type==="credit" ? bal+amt : bal-amt;
+  bal = type==="credit"?bal+amt:bal-amt;
 
   t.set(ref,{balance:bal},{merge:true});
   t.set(ref.collection("history").doc(),{
-   type:type,
-   amount:amt,
-   reason:reasonInput.value||type,
+   type,amount:amt,reason:reasonInput.value||type,
    time:firebase.firestore.FieldValue.serverTimestamp()
   });
  });
 
- alert(type==="credit"?"Recharge done":"Deducted");
- userIdInput.value="";amountInput.value="";reasonInput.value="";
+ alert("Done");
+ userIdInput.value=amountInput.value=reasonInput.value="";
 }
 
-// ================= ALL USERS LIST =================
-function loadUsers(){
- db.collection("wallets").onSnapshot(s=>{
-  let out="";
-  s.forEach(d=>{
-   const x=d.data();
-   const displayBalance = x.active===false?0:(x.balance||0);
-   out+=`
-    <div class="userRow">
-     <b>${d.id}</b><br>
-     Balance: ₹${displayBalance} <br>
-     Status: <span class="${x.active===false?'bad':'good'}">
-       ${x.active===false?'OFF':'ON'}
-     </span>
-     <button onclick="toggleUser('${d.id}',${x.active===false})">
-      ${x.active===false?'Enable':'Disable'}
-     </button>
-    </div>`;
-  });
-  usersList.innerHTML=out||"No users";
+// ================= USERS LIST =================
+async function loadUsers(){
+ const wallets=await db.collection("wallets").get();
+ const users=await db.collection("users").get();
+
+ const map={};
+ users.forEach(d=>map[d.data().walletId]={...d.data(),uid:d.id});
+
+ let out="";
+ wallets.forEach(d=>{
+  const w=d.data();
+  const u=map[d.id]||{};
+  let created="N/A";
+
+  if(u.createdAt){
+   if(u.createdAt.seconds){
+    created=new Date(u.createdAt.seconds*1000).toLocaleString();
+   }else{
+    created=new Date(u.createdAt).toLocaleString();
+   }
+  }
+
+  out+=`
+  <div class="userRow">
+   <b>${u.name||"Unknown User"}</b>
+   <div class="small">Wallet: ${d.id}</div>
+   <div class="small">Created: ${created}</div>
+   <div class="small">UserID: ${u.userid||"-"}</div>
+   <br>
+   Balance: ₹${w.active===false?0:(w.balance||0)}<br>
+   Status: <span class="${w.active===false?'bad':'good'}">
+    ${w.active===false?'OFF':'ON'}
+   </span>
+   <button onclick="toggleUser('${d.id}',${w.active===false})">
+    ${w.active===false?'Enable':'Disable'}
+   </button>
+   <button class="danger" onclick="deleteUser('${d.id}','${u.uid||""}')">
+    🗑️ Delete User
+   </button>
+  </div>`;
  });
+ usersList.innerHTML=out||"No users";
 }
 
-// ================= ENABLE / DISABLE =================
-function toggleUser(uid,state){
- // state = true means currently OFF, we want to turn ON
- db.collection("wallets").doc(uid).set({active:state},{merge:true});
+// ================= TOGGLE =================
+function toggleUser(id,state){
+ db.collection("wallets").doc(id).set({active:state},{merge:true});
+}
+
+// ================= DELETE USER =================
+async function deleteUser(walletId,userDocId){
+ const pass=prompt("Enter delete password");
+ if(pass!==DELETE_PASSWORD) return alert("Wrong password");
+
+ if(!confirm("This will DELETE user & wallet permanently")) return;
+
+ // delete wallet history
+ const h=await db.collection("wallets").doc(walletId).collection("history").get();
+ h.forEach(x=>x.ref.delete());
+
+ await db.collection("wallets").doc(walletId).delete();
+ if(userDocId) await db.collection("users").doc(userDocId).delete();
+
+ alert("User deleted");
+ loadUsers();
 }
 
 // ================= HISTORY =================
@@ -163,7 +191,10 @@ function loadHistory(){
   let out="";
   s.forEach(d=>{
    const x=d.data();
-   out+=`${d.ref.parent.parent.id} | ${x.type.toUpperCase()} ₹${x.amount} | ${x.reason}\n`;
+   const t=x.time?.seconds
+     ? new Date(x.time.seconds*1000).toLocaleString()
+     : "";
+   out+=`${d.ref.parent.parent.id} | ${x.type.toUpperCase()} ₹${x.amount} | ${t}\n`;
   });
   walletHistory.innerText=out||"No history";
  });
